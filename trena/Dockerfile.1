@@ -1,0 +1,11 @@
+FROM bioconductor/devel_core2:latest
+RUN useradd -ms /bin/bash trena
+COPY . /home/trena/tmp
+WORKDIR /home/trena
+RUN R CMD INSTALL /home/trena/tmp/Demo_0.99.0.tar.gz
+
+RUN cat /home/trena/tmp/myBashCustomizations >> /home/trena/.bashrc
+RUN cat /home/trena/tmp/.Rprofile > /home/trena/.Rprofile
+USER trena
+RUN mkdir /home/trena/library
+RUN Rscript -e "install.packages('glmnet', lib='/home/trena/library')"
