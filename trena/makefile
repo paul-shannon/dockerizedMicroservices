@@ -12,3 +12,11 @@ run:
 
 bash:
 	docker run -ti --rm trena bash
+
+buildTrena:
+	docker build -t trenarunnable -f ./Dockerfile.trena .
+
+runTrena:
+	docker run -ti --rm trenarunnable bash
+
+

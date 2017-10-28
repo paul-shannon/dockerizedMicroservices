@@ -1,0 +1,7 @@
+FROM python
+RUN pip install zmq
+RUN useradd -ms /bin/bash trena
+COPY . /home/trena
+EXPOSE 5556
+WORKDIR /home/trena
+

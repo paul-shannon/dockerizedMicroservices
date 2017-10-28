@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  server:
+    build: ./Dockerfile.server
+  client:
+    build: ./Dockerfile.client
+    ports:
+      - "5556:5556"
+    depends_on:
+      - server

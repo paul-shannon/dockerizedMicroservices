@@ -1,0 +1,11 @@
+FROM trena_prelims:latest
+USER root
+RUN apt-get -y install libmariadb-client-lgpl-dev
+RUN Rscript -e "biocGet('RMySQL')"
+RUN mkdir /home/trena/work
+user trena
+COPY . /home/trena/work
+RUN Rscript -e "biocGet('splitstackshape')"
+#RUN Rscript -e "biocGet('BSgenome.Hsapiens.UCSC.hg19')"
+RUN R CMD INSTALL /home/trena/work/MotifDb_1.19.17.tar.gz
+RUN R CMD INSTALL /home/trena/work/trena_0.99.189.tar.gz

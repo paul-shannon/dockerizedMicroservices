@@ -2,8 +2,8 @@ FROM bioconductor/devel_core2:latest
 RUN useradd -ms /bin/bash trena
 COPY . /home/trena/tmp
 WORKDIR /home/trena
-RUN R CMD INSTALL /home/trena/tmp/Demo_0.99.0.tar.gz
-#RUN sudo apt-get install apt-utils -y
+#RUN R CMD INSTALL /home/trena/tmp/Demo_0.99.0.tar.gz
+RUN sudo apt-get install apt-utils -y
 RUN sudo apt-get install libpq-dev -y
 #RUN sudo apt-get install libmysqlclient-dev -y
 RUN cat /home/trena/tmp/myBashCustomizations >> /home/trena/.bashrc
@@ -17,7 +17,7 @@ RUN Rscript -e "biocGet('randomForest')"
 RUN Rscript -e "biocGet('flare')"
 RUN Rscript -e "biocGet('vbsr')"
 RUN Rscript -e "biocGet('RPostgreSQL')"
-RUN Rscript -e "biocGet('RMySQL')"
+#RUN Rscript -e "biocGet('RMySQL')"
 RUN Rscript -e "biocGet('BSgenome.Hsapiens.UCSC.hg38')"
 RUN Rscript -e "biocGet('BSgenome.Mmusculus.UCSC.mm10')"
 RUN Rscript -e "biocGet('org.Hs.eg.db')"
