@@ -1,11 +1,11 @@
 version: '3'
 
 services:
-  server:
-    build: ./Dockerfile.server
-  client:
-    build: ./Dockerfile.client
+  websocketserver:
+    build: ./server
     ports:
-      - "5556:5556"
+      - "5557:5557"
+  client:
+    build: ./client
     depends_on:
-      - server
+      - websocketserver

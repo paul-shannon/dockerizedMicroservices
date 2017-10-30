@@ -1,0 +1,11 @@
+version: '3'
+services:
+  web:
+    build: .
+    ports:
+     - "5008:5008"
+  remoteDictionaryServer:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+

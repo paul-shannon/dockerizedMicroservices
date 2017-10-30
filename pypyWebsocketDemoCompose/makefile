@@ -16,6 +16,5 @@ bashServer:
 bashClient:
 	docker run -ti --rm zmqclient bash
 
-
-
-
+compose:
+	docker-compose up
