@@ -1,10 +1,12 @@
 version: '3'
 
 services:
+
   websocketserver:
     build: ./server
     ports:
       - "5557:5557"
+
   client:
     build: ./client
     depends_on:
