@@ -1,20 +1,8 @@
-buildServer:
-	docker build -t zmqserver -f ./Dockerfile.server .
+build:
+	docker-compose build
+up:
+	docker-compose --no-ansi up
 
-buildClient:
-	docker build -t zmqclient -f ./Dockerfile.client .
-
-runServer:
-	docker run -ti --rm zmqserver
-
-runClient:
-	docker run -ti --rm zmqclient
-
-bashServer:
-	docker run -ti --rm zmqserver bash
-
-bashClient:
-	docker run -ti --rm zmqclient bash
-
-compose:
-	docker-compose up
+clean:
+	docker-compose rm --force --stop --no-ansi
+	- docker rmi `docker images | grep pypy | awk '{print $1}'` --force
