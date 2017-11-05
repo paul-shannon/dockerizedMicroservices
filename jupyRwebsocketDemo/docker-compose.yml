@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+
+  websocketserver:
+    build: ./server
+    ports:
+      - "5557:5557"
+
+  client:
+    build: ./client
+    command:  start-notebook.sh --NotebookApp.base_url=/code
+    ports:
+      - "8888:8888"
+    depends_on:
+      - websocketserver
