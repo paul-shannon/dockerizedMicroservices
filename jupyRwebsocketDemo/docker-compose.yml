@@ -9,8 +9,10 @@ services:
 
   client:
     build: ./client
-    command:  start-notebook.sh --NotebookApp.base_url=/code
+    command:  start-notebook.sh --NotebookApp.base_url=/ --NotebookApp.token= /home/jovyan/simple.ipynb
     ports:
       - "8888:8888"
+    volumes:
+      - /home/jovyan
     depends_on:
       - websocketserver
