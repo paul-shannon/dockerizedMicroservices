@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+
+  websocketserver:
+    build: ./websocketserver
+    ports:
+      - "5557:5557"
+
+  nbserver:
+    build: ./nbserver
+    command:  start-notebook.sh --NotebookApp.base_url=/ --NotebookApp.token= /home/jovyan/simple.ipynb
+    ports:
+      - "8888:8888"
+    volumes:
+      - /home/jovyan
+    depends_on:
+      - websocketserver
+
