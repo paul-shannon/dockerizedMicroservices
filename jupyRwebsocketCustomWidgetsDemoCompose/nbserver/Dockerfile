@@ -1,4 +1,4 @@
-FROM jupyter/base-notebook
-USER jovyan
+FROM nbwidgets:latest
 WORKDIR /home/jovyan
-ADD simple.ipynb /home/jovyan
+USER jovyan
+ADD *.ipynb /home/jovyan/
