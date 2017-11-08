@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+
+  trena:
+    build: ./trena
+    ports:
+      - "5547:5547"
+
+  nbserver:
+    build: ./nbserver
+    command:  start-notebook.sh --NotebookApp.base_url=/ --port=8871 --NotebookApp.token= /home/jovyan/simple.ipynb
+    ports:
+      - "8871:8871"
+    volumes:
+      - /home/jovyan
+    depends_on:
+      - trena
+
