@@ -9,7 +9,7 @@ services:
 
   nbserver:
     build: ./nbserver
-    command:  start-notebook.sh --NotebookApp.base_url=/ --port=8871 --NotebookApp.token= /home/jovyan/simple.ipynb
+    command:  start-notebook.sh --NotebookApp.base_url=/ --port=8871 --NotebookApp.token= #/home/jovyan/trenaViz/examples/basicDemo/simple.ipynb
     ports:
       - "8871:8871"
     volumes:
