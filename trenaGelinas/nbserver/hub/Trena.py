@@ -23,6 +23,8 @@ class Trena:
         response = json.loads(self.trenaServer.recv_string())
         return(response)
 
+    def showGenomicRegion(self, regionString):
+        self.tv.showGenomicRegion(regionString);
 
-
-
+    def getGenomicRegion(self):
+        return(self.tv.getBrowserState()["chromLocString"]);
