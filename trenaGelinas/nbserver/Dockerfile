@@ -1,7 +1,7 @@
 FROM ipytrenaviz:latest
+USER root
 WORKDIR /home/jovyan
 ADD . /home/jovyan/trenaViz/
-USER root
 RUN chown -R jovyan:users /home/jovyan
 USER jovyan
 WORKDIR /home/jovyan/trenaViz

@@ -1,4 +1,5 @@
 import zmq, json
+import pandas as pd
 from ipyTrenaViz import *
 
 class Trena:
@@ -28,3 +29,30 @@ class Trena:
 
     def getGenomicRegion(self):
         return(self.tv.getBrowserState()["chromLocString"]);
+
+    def dataFrameFrom3partList(self, list):
+        data = list['tbl']
+        rownames = list['rownames']
+        colnames = list['colnames']
+        df = pd.DataFrame(data)
+        df.columns = colnames
+        rownameList = {}
+        for i in range(len(rownames)):
+          rownameList[i] = rownames[i]
+        df = df.rename(rownameList)
+        return(df)
+
+
+    def summarizeExpressionMatrices(self):
+        msg = {'cmd': 'summarizeExpressionMatrices', 'status': 'request', 'callback': '', 'payload': ''}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(self.dataFrameFrom3partList(payload))
+
+    def createGeneModel(self, targetGene, solverNames, matrixName):
+        payload = {'targetGene': targetGene,
+                   'solverNames': solverNames,
+                   'matrixName': matrixName}
+        msg = {'cmd': 'createGeneModel', 'status': 'request', 'callback': '', 'payload': payload}
+
