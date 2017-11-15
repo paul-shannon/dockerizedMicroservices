@@ -42,13 +42,27 @@ class Trena:
         df = df.rename(rownameList)
         return(df)
 
-
     def summarizeExpressionMatrices(self):
         msg = {'cmd': 'summarizeExpressionMatrices', 'status': 'request', 'callback': '', 'payload': ''}
         self.trenaServer.send_string(json.dumps(msg))
         response = json.loads(self.trenaServer.recv_string())
         payload = response["payload"]
         return(self.dataFrameFrom3partList(payload))
+
+    def getFootprintsInRegion(self):
+        payload = {"roi": self.getGenomicRegion()}
+        msg = {'cmd': 'getFootprintsInRegion', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(self.dataFrameFrom3partList(payload))
+
+    def sessionInfo(self):
+        msg = {'cmd': 'getSessionInfo', 'status': 'request', 'callback': '', 'payload': ""}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(payload);
 
     def createGeneModel(self, targetGene, solverNames, matrixName):
         payload = {'targetGene': targetGene,

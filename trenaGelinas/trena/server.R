@@ -1,7 +1,10 @@
 library(rzmq)
 library(jsonlite)
+library(trena)
 PORT <- 5547
 #------------------------------------------------------------------------------------------------------------------------
+# load expression matrices on startup
+#
 matrix.files <- c("data/mtx.protectedAndExposed.RData",
                   "data/gtex.fibroblast.RData",
                   "data/gtex.primary.RData")
@@ -20,11 +23,33 @@ for(matrix.name in names(expression.matrix.files)){
     }
 
 #------------------------------------------------------------------------------------------------------------------------
+# interpret a data.frame as a list of data (a bare data.frame), columnames, and rownames
+# this makes for easy reconstruction into a pandas dataframe in python.
+dataFrameToPandasFriendlyList <- function(tbl)
+{
+   rownames = rownames(tbl)
+   colnames = colnames(tbl)
+   rownames(tbl) <- NULL
+
+   list(rownames=rownames, colnames=colnames, tbl=tbl)
+
+} # dataFrameToPandasFriendlyList
+#------------------------------------------------------------------------------------------------------------------------
 processWellStructuredMessage <- function(msg)
 {
    if(msg$cmd == "summarizeExpressionMatrices"){
-      tbl.summary <- summarizeExpressionMatrices()
-      response <- list(cmd=msg$callback, status="success", callback="", payload=tbl.summary)
+      tbl.summary.as.list <- summarizeExpressionMatrices()
+      response <- list(cmd=msg$callback, status="success", callback="", payload=tbl.summary.as.list)
+      }
+   else if(msg$cmd == "getSessionInfo"){
+      info <- as.character(sessionInfo())
+      response <- list(cmd=msg$callback, status="success", callback="", payload=info)
+      }
+   else if(msg$cmd == "getFootprintsInRegion"){
+      stopifnot("roi" %in% names(msg$payload))
+      roi <- msg$payload$roi
+      tbl.fp.as.list <- getFootprints(roi)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=tbl.fp.as.list);
       }
    else{
       response <- list(cmd=msg$callback, status="success", callback="", payload="well-structured (unparsed) message")
@@ -65,15 +90,40 @@ summarizeExpressionMatrices <- function()
 
 } # summarizeExpressionMatrices
 #------------------------------------------------------------------------------------------------------------------------
-dataFrameToPandasFriendlyList <- function(tbl)
+getFootprints <- function(roi)
 {
-   rownames = rownames(tbl)
-   colnames = colnames(tbl)
-   rownames(tbl) <- NULL
+   trena <- Trena("hg38")
+   source.1 <- "postgres://bddsrds.globusgenomics.org/skin_wellington_16"
+   source.2 <- "postgres://bddsrds.globusgenomics.org/skin_wellington_20"
+   source.3 <- "postgres://bddsrds.globusgenomics.org/skin_hint_16"
+   source.4 <- "postgres://bddsrds.globusgenomics.org/skin_hint_20"
+   sources <- c(source.1, source.2, source.3, source.4)
+   names(sources) <- c("well_16", "well_20", "hint_16", "hint_20")
 
-   list(rownames=rownames, colnames=colnames, tbl=tbl)
+   targetGene <- "COL1A1"
+   tss <- 50201632
 
-} # dataFrameToPandasFriendlyList
+   cls <- parseChromLocString(roi)   # a trena function
+
+   x <- getRegulatoryChromosomalRegions(trena, cls$chrom, cls$start, cls$end, sources, targetGene, tss)
+   print(1)
+   names(x) <- names(sources)
+   print(2)
+
+      # append a column to each non-empty table, giving it the source name
+   x2 <- lapply(names(x), function(name) {tbl <-x[[name]]; if(nrow(tbl) >0) tbl$db <- name; return(tbl)})
+   print(3)
+
+   tbl.reg <- do.call(rbind, x2)
+   print(4)
+   rownames(tbl.reg) <- NULL
+   print(5)
+      # be strict for now: just the 2016 jaspar human motifs
+   tbl.reg <- unique(tbl.reg[grep("Hsapiens-jaspar2016", tbl.reg$motifName, ignore.case=TRUE),])
+   print(6)
+   dataFrameToPandasFriendlyList(tbl.reg)
+
+} # getFootprints
 #------------------------------------------------------------------------------------------------------------------------
 if(!interactive()) {
 
