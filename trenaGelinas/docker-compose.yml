@@ -1,4 +1,4 @@
-version: '3'
+version: '3.2'
 
 services:
 
@@ -6,6 +6,10 @@ services:
     build: ./trena
     ports:
       - "5547:5547"
+    volumes:
+      - type: volume
+        source: gelinasSkinSharedData
+        target: /home/trena/work/shared
 
   nbserver:
     build: ./nbserver
@@ -13,7 +17,11 @@ services:
     ports:
       - "8871:8871"
     volumes:
-      - /home/jovyan
-    depends_on:
-      - trena
+      - type: volume
+        source: gelinasSkinSharedData
+        target: /home/jovyan/trenaViz/shared
+
+volumes:
+    gelinasSkinSharedData:
+
 

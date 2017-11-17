@@ -57,8 +57,23 @@ class Trena:
         payload = response["payload"]
         return(self.dataFrameFrom3partList(payload))
 
+    def displayFootprints(self, tbl):
+        payload = {"roi": self.getGenomicRegion()}
+        msg = {'cmd': 'getFootprintsInRegion', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(self.dataFrameFrom3partList(payload))
+
     def sessionInfo(self):
         msg = {'cmd': 'getSessionInfo', 'status': 'request', 'callback': '', 'payload': ""}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(payload);
+
+    def listSharedData(self):
+        msg = {'cmd': 'listSharedData', 'status': 'request', 'callback': '', 'payload': ""}
         self.trenaServer.send_string(json.dumps(msg))
         response = json.loads(self.trenaServer.recv_string())
         payload = response["payload"]

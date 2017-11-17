@@ -51,6 +51,13 @@ processWellStructuredMessage <- function(msg)
       tbl.fp.as.list <- getFootprints(roi)
       response <- list(cmd=msg$callback, status="success", callback="", payload=tbl.fp.as.list);
       }
+   else if(msg$cmd == "listSharedData"){
+      printf("--- about to get shared data filenames")
+      print(list.files("/home/trena/work"))
+      print(list.files("/home/trena/work/shared"))
+      filenames <- list.files("/home/trena/work/shared")
+      response <- list(cmd=msg$callback, status="success", callback="", payload=filenames);
+      }
    else{
       response <- list(cmd=msg$callback, status="success", callback="", payload="well-structured (unparsed) message")
       }
