@@ -127,6 +127,14 @@ getFootprints <- function(roi)
    print(5)
       # be strict for now: just the 2016 jaspar human motifs
    tbl.reg <- unique(tbl.reg[grep("Hsapiens-jaspar2016", tbl.reg$motifName, ignore.case=TRUE),])
+   tbl.reg <- tbl.reg[order(tbl.reg$motifStart),]
+   tbl.bed <- tbl.reg[, c("chrom", "motifStart", "motifEnd")]
+   tbl.bed$fpName <- paste(tbl.reg$motifName, tbl.reg$db, sep="_")
+      # nasty hack, working around igv.js, npm, ipywidgets, docker, ???: last line in tbl is dropped
+   tbl.bed <- rbind(tbl.bed, tbl.bed[nrow(tbl.bed),])
+   printf("--- writing tbl.bed")
+   write.table(tbl.bed, file="/home/trena/work/shared/tbl.bed", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
+   printf("--- after write")
    print(6)
    dataFrameToPandasFriendlyList(tbl.reg)
 
