@@ -52,11 +52,36 @@ processWellStructuredMessage <- function(msg)
       response <- list(cmd=msg$callback, status="success", callback="", payload=tbl.fp.as.list);
       }
    else if(msg$cmd == "listSharedData"){
-      printf("--- about to get shared data filenames")
-      print(list.files("/home/trena/work"))
-      print(list.files("/home/trena/work/shared"))
       filenames <- list.files("/home/trena/work/shared")
       response <- list(cmd=msg$callback, status="success", callback="", payload=filenames);
+      }
+   else if(msg$cmd == "createGeneModel"){
+      trena <- Trena("hg38")   # probably should create a single global instead
+      solver.names <- c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman")
+      stopifnot(all(c("targetGene", "matrixName") %in% names(msg$payload)))
+      targetGene <- toupper(msg$payload$targetGene)
+      matrixName <- msg$payload$matrixName
+      tbl.motifs <- read.table("/home/trena/work/shared/tbl.bed", sep="\t", as.is=TRUE, stringsAsFactors=FALSE)
+      colnames(tbl.motifs) <- c("chrom", "start", "end", "motifName")
+      print(head(tbl.motifs))
+      tbl.motifs$motifName <- sub("_well_16", "", tbl.motifs$motifName)
+      tbl.motifs$motifName <- sub("_well_20", "", tbl.motifs$motifName)
+      tbl.motifs$motifName <- sub("_hint_16", "", tbl.motifs$motifName)
+      tbl.motifs$motifName <- sub("_hint_20", "", tbl.motifs$motifName)
+      print(head(tbl.motifs))
+
+      tbl.motifs.tfs <- associateTranscriptionFactors(MotifDb, tbl.motifs, source="MotifDb", expand.rows=FALSE)
+      print(head(tbl.motifs.tfs))
+
+      mtx <- expression.matrices[[matrixName]]
+      stopifnot(targetGene %in% rownames(mtx))
+      print(dim(mtx))
+      print(mean(mtx[targetGene,]))
+      tbl.geneModel <- createGeneModel(trena, targetGene, solver.names, tbl.motifs.tfs, mtx)
+      tbl.geneModel <- tbl.geneModel[order(tbl.geneModel$rfScore, decreasing=TRUE),]
+      print(tbl.geneModel)
+      response <- list(cmd=msg$callback, status="success", callback="",
+                       payload=dataFrameToPandasFriendlyList(tbl.geneModel))
       }
    else{
       response <- list(cmd=msg$callback, status="success", callback="", payload="well-structured (unparsed) message")

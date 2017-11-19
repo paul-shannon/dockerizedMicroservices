@@ -77,9 +77,13 @@ class Trena:
         payload = response["payload"]
         return(payload);
 
-    def createGeneModel(self, targetGene, solverNames, matrixName):
+    def createGeneModel(self, targetGene,  matrixName):
         payload = {'targetGene': targetGene,
-                   'solverNames': solverNames,
                    'matrixName': matrixName}
         msg = {'cmd': 'createGeneModel', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(self.dataFrameFrom3partList(payload))
+
 
