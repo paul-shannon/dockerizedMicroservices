@@ -5,7 +5,7 @@ PORT <- 5547
 #------------------------------------------------------------------------------------------------------------------------
 # load expression matrices on startup
 #
-expression.matrix.files <- list(protectedAndExposed="../privateData/mtx.protectedAndExposed.RData",
+expression.matrix.files <- list(protectedAndExposed="../privateData/mtx.protectedAndExposedLowVarianceGenesEliminated.RData",
                                 gtexFibroblast="../privateData/gtex.fibroblast.RData",
                                 gtexPrimary="../privateData/gtex.primary.RData")
 expression.matrices <- list()
