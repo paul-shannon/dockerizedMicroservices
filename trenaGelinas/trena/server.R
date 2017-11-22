@@ -5,13 +5,9 @@ PORT <- 5547
 #------------------------------------------------------------------------------------------------------------------------
 # load expression matrices on startup
 #
-matrix.files <- c("data/mtx.protectedAndExposed.RData",
-                  "data/gtex.fibroblast.RData",
-                  "data/gtex.primary.RData")
-
-expression.matrix.files <- list(protectedAndExposed="data/mtx.protectedAndExposed.RData",
-                                gtexFibroblast="data/gtex.fibroblast.RData",
-                                gtexPrimary="data/gtex.primary.RData")
+expression.matrix.files <- list(protectedAndExposed="../privateData/mtx.protectedAndExposed.RData",
+                                gtexFibroblast="../privateData/gtex.fibroblast.RData",
+                                gtexPrimary="../privateData/gtex.primary.RData")
 expression.matrices <- list()
 
 for(matrix.name in names(expression.matrix.files)){
@@ -52,7 +48,7 @@ processWellStructuredMessage <- function(msg)
       response <- list(cmd=msg$callback, status="success", callback="", payload=tbl.fp.as.list);
       }
    else if(msg$cmd == "listSharedData"){
-      filenames <- list.files("/home/trena/work/shared")
+      filenames <- list.files("/home/trena/sharedData")
       response <- list(cmd=msg$callback, status="success", callback="", payload=filenames);
       }
    else if(msg$cmd == "createGeneModel"){
@@ -61,7 +57,7 @@ processWellStructuredMessage <- function(msg)
       stopifnot(all(c("targetGene", "matrixName") %in% names(msg$payload)))
       targetGene <- toupper(msg$payload$targetGene)
       matrixName <- msg$payload$matrixName
-      tbl.motifs <- read.table("/home/trena/work/shared/tbl.bed", sep="\t", as.is=TRUE, stringsAsFactors=FALSE)
+      tbl.motifs <- read.table("/home/trena/sharedData/tbl.bed", sep="\t", as.is=TRUE, stringsAsFactors=FALSE)
       colnames(tbl.motifs) <- c("chrom", "start", "end", "motifName")
       print(head(tbl.motifs))
       tbl.motifs$motifName <- sub("_well_16", "", tbl.motifs$motifName)
@@ -158,7 +154,7 @@ getFootprints <- function(roi)
       # nasty hack, working around igv.js, npm, ipywidgets, docker, ???: last line in tbl is dropped
    tbl.bed <- rbind(tbl.bed, tbl.bed[nrow(tbl.bed),])
    printf("--- writing tbl.bed")
-   write.table(tbl.bed, file="/home/trena/work/shared/tbl.bed", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
+   write.table(tbl.bed, file="/home/trena/sharedData/tbl.bed", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
    printf("--- after write")
    print(6)
    dataFrameToPandasFriendlyList(tbl.reg)

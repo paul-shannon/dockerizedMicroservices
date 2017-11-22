@@ -9,7 +9,7 @@ services:
     volumes:
       - type: volume
         source: gelinasSkinSharedData
-        target: /home/trena/work/shared
+        target: /home/trena/sharedData
 
   nbserver:
     build: ./nbserver
@@ -19,7 +19,7 @@ services:
     volumes:
       - type: volume
         source: gelinasSkinSharedData
-        target: /home/jovyan/trenaViz/shared
+        target: /home/jovyan/trenaViz/sharedData
 
 volumes:
     gelinasSkinSharedData:
