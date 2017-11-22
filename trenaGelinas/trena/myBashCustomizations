@@ -1,0 +1,2 @@
+alias ddir='ls -lap | grep ^d'
+
