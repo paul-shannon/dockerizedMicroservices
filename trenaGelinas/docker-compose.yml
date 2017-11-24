@@ -20,8 +20,7 @@ services:
       - type: volume
         source: gelinasSkinSharedData
         target: /home/jovyan/trenaViz/sharedData
+      - "./hostDir:/home/jovyan/trenaViz/hostDir"
 
 volumes:
     gelinasSkinSharedData:
-
-

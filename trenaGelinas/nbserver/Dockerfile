@@ -5,6 +5,7 @@ COPY myBashCustomizations /home/jovyan/
 RUN cat myBashCustomizations >> /home/jovyan/.bashrc
 
 COPY col1a1.ipynb /home/jovyan/trenaViz/
+COPY tester.ipynb /home/jovyan/trenaViz/
 RUN mkdir /home/jovyan/trenaViz/hub
 COPY hub/* /home/jovyan/trenaViz/hub/
 

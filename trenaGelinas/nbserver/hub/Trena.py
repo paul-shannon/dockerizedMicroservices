@@ -42,6 +42,13 @@ class Trena:
         df = df.rename(rownameList)
         return(df)
 
+    def getExpressionMatrixNames(self):
+        msg = {'cmd': 'getExpressionMatrixNames', 'status': 'request', 'callback': '', 'payload': ''}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(payload)
+
     def summarizeExpressionMatrices(self):
         msg = {'cmd': 'summarizeExpressionMatrices', 'status': 'request', 'callback': '', 'payload': ''}
         self.trenaServer.send_string(json.dumps(msg))

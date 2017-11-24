@@ -41,6 +41,10 @@ processWellStructuredMessage <- function(msg)
       info <- as.character(sessionInfo())
       response <- list(cmd=msg$callback, status="success", callback="", payload=info)
       }
+   else if(msg$cmd == "getExpressionMatrixNames"){
+      info <- sort(names(expression.matrix.files))
+      response <- list(cmd=msg$callback, status="success", callback="", payload=info)
+      }
    else if(msg$cmd == "getFootprintsInRegion"){
       stopifnot("roi" %in% names(msg$payload))
       roi <- msg$payload$roi
