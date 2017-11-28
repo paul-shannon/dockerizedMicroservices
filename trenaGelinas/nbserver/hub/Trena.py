@@ -62,7 +62,7 @@ class Trena:
         payload = response["payload"]
         tbl = self.dataFrameFrom3partList(payload)
         if(display):
-           self.tv.addBedTrackFromDataFrame(tbl)
+           self.tv.addBedTrackFromDataFrame(tbl, "footprints", "EXPANDED", "blue")
         return(tbl)
 
     def displayFootprints(self, url):
