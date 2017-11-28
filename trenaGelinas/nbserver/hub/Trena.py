@@ -1,22 +1,22 @@
 import zmq, json
 import pandas as pd
 from ipyTrenaViz import *
+import time
 
 class Trena:
 
-    def __init__(self, name):
-       self.name = name;
+    def __init__(self, genomeName):
+       print("--- starting Trena ctor");
        socketContext = zmq.Context();
        self.trenaServer = socketContext.socket(zmq.REQ)
        self.trenaServer.connect("tcp://trena:%s" % "5547")
        self.tv = ipyTrenaViz()
+       print(self.tv)
+       display(self.tv)
+       self.tv.setGenome(genomeName)
 
     def display(self):
        display(self.tv)
-       self.tv.setGenome()
-
-    def getName(self):
-        return self.name
 
     def ping(self):
         msg = {'cmd': 'ping', 'status': 'request', 'callback': '', 'payload': ''}
@@ -56,16 +56,22 @@ class Trena:
         payload = response["payload"]
         return(self.dataFrameFrom3partList(payload))
 
-    def getFootprintsInRegion(self):
+    def getFootprintsInRegion(self, display):
         payload = {"roi": self.getGenomicRegion()}
         msg = {'cmd': 'getFootprintsInRegion', 'status': 'request', 'callback': '', 'payload': payload}
         self.trenaServer.send_string(json.dumps(msg))
         response = json.loads(self.trenaServer.recv_string())
         payload = response["payload"]
-        return(self.dataFrameFrom3partList(payload))
+        tbl = self.dataFrameFrom3partList(payload)
+        if(display):
+           self.tv.addBedTrackFromDataFrame(tbl)
+        return(tbl)
 
     def displayFootprints(self, url):
         self.tv.addBedTrackFromDataFrame(url)
+
+    def addBedTrackFromDataFrame(self, tbl, trackName, trackMode, color, trackHeight=200):
+        return(self.tv.addBedTrackFromDataFrame(tbl, trackName, trackMode, color, trackHeight))
 
     def displayGraph(self, filename, modelName):
         self.tv.displayGraph(filename, modelName)

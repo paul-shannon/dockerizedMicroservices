@@ -9,7 +9,7 @@ services:
     volumes:
       - type: volume
         source: gelinasSkinSharedData
-        target: /home/trena/sharedData
+        target: /home/trena/tmp
 
   nbserver:
     build: ./nbserver
@@ -19,7 +19,7 @@ services:
     volumes:
       - type: volume
         source: gelinasSkinSharedData
-        target: /home/jovyan/trenaViz/sharedData
+        target: /home/jovyan/trenaViz/tmp
       - "./hostDir:/home/jovyan/trenaViz/hostDir"
 
 volumes:
