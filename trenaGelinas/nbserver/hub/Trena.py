@@ -6,12 +6,10 @@ import time
 class Trena:
 
     def __init__(self, genomeName):
-       print("--- starting Trena ctor");
        socketContext = zmq.Context();
        self.trenaServer = socketContext.socket(zmq.REQ)
        self.trenaServer.connect("tcp://trena:%s" % "5547")
        self.tv = ipyTrenaViz()
-       print(self.tv)
        display(self.tv)
        self.tv.setGenome(genomeName)
 
