@@ -71,8 +71,19 @@ class Trena:
     def addBedTrackFromDataFrame(self, tbl, trackName, trackMode, color, trackHeight=200):
         return(self.tv.addBedTrackFromDataFrame(tbl, trackName, trackMode, color, trackHeight))
 
-    def displayGraph(self, filename, modelName):
-        self.tv.displayGraph(filename, modelName)
+    def buildMultiModelGraph(self, targetGene, models):
+        payload = {"targetGene": targetGene, "models": models};
+        msg = {'cmd': 'buildMultiModelGraph', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        print("back from buildMultiModelGraph");
+
+    def displayGraphFromFile(self, filename, modelNames):
+        self.tv.displayGraphFromFile(filename, modelNames)
+
+    def setStyle(self, filename):
+        self.tv.setStyle(filename)
 
     def sessionInfo(self):
         msg = {'cmd': 'getSessionInfo', 'status': 'request', 'callback': '', 'payload': ""}
@@ -96,5 +107,24 @@ class Trena:
         response = json.loads(self.trenaServer.recv_string())
         payload = response["payload"]
         return(self.dataFrameFrom3partList(payload))
+
+    def createTaggedDataFrame(self, rows, columns):
+        payload = {'rows': rows, 'cols': columns}
+        msg = {'cmd': 'createTaggedDataFrame', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        tblAsList = payload["tbl"]
+        pTbl = self.dataFrameFrom3partList(tblAsList)
+        pTbl.key = payload["key"]
+        return(pTbl)
+
+    def findTaggedDataFrameOnServer(self, tbl):
+        payload = tbl.key
+        msg = {'cmd': 'identifyTaggedDataFrame', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(payload)
 
 

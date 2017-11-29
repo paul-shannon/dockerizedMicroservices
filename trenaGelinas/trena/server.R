@@ -1,6 +1,7 @@
 library(rzmq)
 library(jsonlite)
 library(trena)
+library(trenaViz) # used here only for buildMultiModelGraph
 PORT <- 5547
 #------------------------------------------------------------------------------------------------------------------------
 # load expression matrices on startup
@@ -9,6 +10,9 @@ expression.matrix.files <- list(protectedAndExposed="../privateData/mtx.protecte
                                 gtexFibroblast="../privateData/gtex.fibroblast.RData",
                                 gtexPrimary="../privateData/gtex.primary.RData")
 expression.matrices <- list()
+
+# stash all computed objects here, to save return trips from jupyter and, especially, awkward JSON conversions of data.frams
+cache <- new.env(parent=emptyenv())
 
 for(matrix.name in names(expression.matrix.files)){
     file.name <- expression.matrix.files[[matrix.name]]
@@ -55,6 +59,26 @@ processWellStructuredMessage <- function(msg)
       filenames <- list.files("/home/trena/sharedData")
       response <- list(cmd=msg$callback, status="success", callback="", payload=filenames);
       }
+   else if(msg$cmd == "createTaggedDataFrame"){
+      rows <- msg$payload$rows
+      cols <- msg$payload$cols
+      tbl <- as.data.frame(matrix(runif(32), nrow=rows, ncol=cols, dimnames=list(LETTERS[1:rows],  letters[1:cols])))
+      key <- as.character(as.numeric(Sys.time()) * 100000)
+      cache[[key]] <- tbl
+      tbl.for.pandas <- dataFrameToPandasFriendlyList(tbl)
+      payload <- list(tbl=tbl.for.pandas, key=key)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
+      }
+   else if(msg$cmd == "identifyTaggedDataFrame"){
+      key <- msg$payload
+      found <- key %in% names(cache)
+      tbl.retrieved <- cache[[key]]
+      printf("retrieved tbl with dimensions %d, %d", nrow(tbl.retrieved), ncol(tbl.retrieved))
+      print(tbl.retrieved)
+      sum <- sum(as.matrix(tbl.retrieved))
+      payload <- list(found=found, sum=sum)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
+      }
    else if(msg$cmd == "createGeneModel"){
       trena <- Trena("hg38")   # probably should create a single global instead
       solver.names <- c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman")
@@ -82,7 +106,11 @@ processWellStructuredMessage <- function(msg)
       print(tbl.geneModel)
       response <- list(cmd=msg$callback, status="success", callback="",
                        payload=dataFrameToPandasFriendlyList(tbl.geneModel))
-      }
+      } # createGeneModel
+   else if(msg$cmd == "buildMultiModelGraph"){
+      response <- list(cmd=msg$callback, status="success", callback="",
+                       payload="hola!")
+      } # buildMultiModelGraph
    else{
       response <- list(cmd=msg$callback, status="success", callback="", payload="well-structured (unparsed) message")
       }
