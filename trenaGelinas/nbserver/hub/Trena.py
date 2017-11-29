@@ -60,10 +60,13 @@ class Trena:
         self.trenaServer.send_string(json.dumps(msg))
         response = json.loads(self.trenaServer.recv_string())
         payload = response["payload"]
-        tbl = self.dataFrameFrom3partList(payload)
+
+        tblAsList = payload["tbl"]
+        regTbl = self.dataFrameFrom3partList(tblAsList)
+        regTbl.key = payload["key"]
         if(display):
-           self.tv.addBedTrackFromDataFrame(tbl, "footprints", "EXPANDED", "blue")
-        return(tbl)
+           self.tv.addBedTrackFromDataFrame(regTbl, "footprints", "EXPANDED", "blue")
+        return(regTbl)
 
     def displayFootprints(self, url):
         self.tv.addBedTrackFromDataFrame(url)
@@ -106,7 +109,10 @@ class Trena:
         self.trenaServer.send_string(json.dumps(msg))
         response = json.loads(self.trenaServer.recv_string())
         payload = response["payload"]
-        return(self.dataFrameFrom3partList(payload))
+        tblAsList = payload["tbl"]
+        tbl = self.dataFrameFrom3partList(tblAsList)
+        tbl.key = payload["key"]
+        return(tbl)
 
     def createTaggedDataFrame(self, rows, columns):
         payload = {'rows': rows, 'cols': columns}

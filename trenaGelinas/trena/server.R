@@ -52,8 +52,12 @@ processWellStructuredMessage <- function(msg)
    else if(msg$cmd == "getFootprintsInRegion"){
       stopifnot("roi" %in% names(msg$payload))
       roi <- msg$payload$roi
-      tbl.fp.as.list <- getFootprints(roi)
-      response <- list(cmd=msg$callback, status="success", callback="", payload=tbl.fp.as.list);
+      tbl.reg <- getFootprints(roi)
+      key <- as.character(as.numeric(Sys.time()) * 100000)
+      cache[[key]] <- tbl.reg
+      tbl.fp.as.list <- dataFrameToPandasFriendlyList(tbl.reg)
+      payload <- list(tbl=tbl.fp.as.list, key=key)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
       }
    else if(msg$cmd == "listSharedData"){
       filenames <- list.files("/home/trena/sharedData")
@@ -103,9 +107,11 @@ processWellStructuredMessage <- function(msg)
       print(mean(mtx[targetGene,]))
       tbl.geneModel <- createGeneModel(trena, targetGene, solver.names, tbl.motifs.tfs, mtx)
       tbl.geneModel <- tbl.geneModel[order(tbl.geneModel$rfScore, decreasing=TRUE),]
+      key <- as.character(as.numeric(Sys.time()) * 100000)
+      cache[[key]] <- tbl.geneModel
       print(tbl.geneModel)
-      response <- list(cmd=msg$callback, status="success", callback="",
-                       payload=dataFrameToPandasFriendlyList(tbl.geneModel))
+      payload=list(tbl=dataFrameToPandasFriendlyList(tbl.geneModel), key=key)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=payload)
       } # createGeneModel
    else if(msg$cmd == "buildMultiModelGraph"){
       response <- list(cmd=msg$callback, status="success", callback="",
@@ -189,7 +195,7 @@ getFootprints <- function(roi)
    write.table(tbl.bed, file="/home/trena/sharedData/tbl.bed", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
    printf("--- after write")
    print(6)
-   dataFrameToPandasFriendlyList(tbl.reg)
+   tbl.reg
 
 } # getFootprints
 #------------------------------------------------------------------------------------------------------------------------
