@@ -74,14 +74,6 @@ class Trena:
     def addBedTrackFromDataFrame(self, tbl, trackName, trackMode, color, trackHeight=200):
         return(self.tv.addBedTrackFromDataFrame(tbl, trackName, trackMode, color, trackHeight))
 
-    def buildMultiModelGraph(self, targetGene, models):
-        payload = {"targetGene": targetGene, "models": models};
-        msg = {'cmd': 'buildMultiModelGraph', 'status': 'request', 'callback': '', 'payload': payload}
-        self.trenaServer.send_string(json.dumps(msg))
-        response = json.loads(self.trenaServer.recv_string())
-        payload = response["payload"]
-        print("back from buildMultiModelGraph");
-
     def displayGraphFromFile(self, filename, modelNames):
         self.tv.displayGraphFromFile(filename, modelNames)
 
@@ -102,8 +94,12 @@ class Trena:
         payload = response["payload"]
         return(payload);
 
-    def createGeneModel(self, targetGene,  matrixName):
+    def createGeneModel(self, targetGene,  solverNames, tbl_regRegions, tfMap, matrixName):
+
         payload = {'targetGene': targetGene,
+                   'solverNames': solverNames,
+                   'tblRegulatoryRegionsCacheKey': tbl_regRegions.key,   # used to look up in cache
+                   'tfMap': tfMap,
                    'matrixName': matrixName}
         msg = {'cmd': 'createGeneModel', 'status': 'request', 'callback': '', 'payload': payload}
         self.trenaServer.send_string(json.dumps(msg))
@@ -113,6 +109,23 @@ class Trena:
         tbl = self.dataFrameFrom3partList(tblAsList)
         tbl.key = payload["key"]
         return(tbl)
+
+    def buildMultiModelGraph(self, targetGene, modelList):
+       modelNames = modelList.keys()
+       for modelName in modelNames:
+          print(' now reducing modelName %s' % modelName)
+          tbl = modelList[modelName]['model']
+          modelList[modelName]['model'] = tbl.key
+          tbl = modelList[modelName]['regions']
+          modelList[modelName]['regions'] = tbl.key
+
+       payload = {"targetGene": targetGene, "models": modelList};
+       msg = {'cmd': 'buildMultiModelGraph', 'status': 'request', 'callback': '', 'payload': payload}
+       self.trenaServer.send_string(json.dumps(msg))
+       response = json.loads(self.trenaServer.recv_string())
+       payload = response["payload"]
+       print("back from buildMultiModelGraph");
+       return(payload)
 
     def createTaggedDataFrame(self, rows, columns):
         payload = {'rows': rows, 'cols': columns}

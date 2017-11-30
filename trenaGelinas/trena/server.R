@@ -1,7 +1,7 @@
 library(rzmq)
 library(jsonlite)
 library(trena)
-library(trenaViz) # used here only for buildMultiModelGraph
+library(trenaViz) # used here only for buildMultiModelGraph and addGeneLayout
 PORT <- 5547
 #------------------------------------------------------------------------------------------------------------------------
 # load expression matrices on startup
@@ -85,11 +85,21 @@ processWellStructuredMessage <- function(msg)
       }
    else if(msg$cmd == "createGeneModel"){
       trena <- Trena("hg38")   # probably should create a single global instead
-      solver.names <- c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman")
+      payload <- msg$payload
+      solver.names <- payload$solverNames
+      printf("---- createGeneModel about to extract tbl.motifs from cache")
+      key <- payload$tblRegulatoryRegionsCacheKey
+      printf("    key: %s", key)
+      found <- key %in% names(cache)
+      printf("    found? %s", found)
+      tbl.motifs <- cache[[key]]
+      printf("    tbl.motifs: %d, %d", nrow(tbl.motifs), ncol(tbl.motifs))
+      tfMap <- payload$tfMap
       stopifnot(all(c("targetGene", "matrixName") %in% names(msg$payload)))
       targetGene <- toupper(msg$payload$targetGene)
       matrixName <- msg$payload$matrixName
-      tbl.motifs <- read.table("/home/trena/sharedData/tbl.bed", sep="\t", as.is=TRUE, stringsAsFactors=FALSE)
+      #tbl.motifs <- read.table("/home/trena/sharedData/tbl.bed", sep="\t", as.is=TRUE, stringsAsFactors=FALSE)
+      tbl.motifs <- tbl.motifs[, 1:5]
       colnames(tbl.motifs) <- c("chrom", "start", "end", "motifName")
       print(head(tbl.motifs))
       tbl.motifs$motifName <- sub("_well_16", "", tbl.motifs$motifName)
@@ -98,7 +108,7 @@ processWellStructuredMessage <- function(msg)
       tbl.motifs$motifName <- sub("_hint_20", "", tbl.motifs$motifName)
       print(head(tbl.motifs))
 
-      tbl.motifs.tfs <- associateTranscriptionFactors(MotifDb, tbl.motifs, source="MotifDb", expand.rows=FALSE)
+      tbl.motifs.tfs <- associateTranscriptionFactors(MotifDb, tbl.motifs, source=tfMap, expand.rows=FALSE)
       print(head(tbl.motifs.tfs))
 
       mtx <- expression.matrices[[matrixName]]
@@ -114,8 +124,29 @@ processWellStructuredMessage <- function(msg)
       response <- list(cmd=msg$callback, status="success", callback="", payload=payload)
       } # createGeneModel
    else if(msg$cmd == "buildMultiModelGraph"){
-      response <- list(cmd=msg$callback, status="success", callback="",
-                       payload="hola!")
+      printf("----- buildMultiModelGraph")
+      payload = msg$payload
+      print(payload)
+      targetGene <- payload$targetGene
+      models <- payload$models
+      models.decached <- list()
+      for(name in names(models)){
+         model <- models[[name]]
+         tbl.geneModel <-  cache[[model$model]]
+         tbl.regions <- cache[[model$regions]]
+         tbl.regions <- subset(tbl.regions, geneSymbol %in% tbl.geneModel$gene)
+         models.decached[[name]]$model <- tbl.geneModel
+         models.decached[[name]]$regions <- tbl.regions
+         } # for model
+      printf("---- after decaching")
+      print(models.decached)
+      g <- trenaViz::buildMultiModelGraph(targetGene, models.decached)
+      xCoordinate.span <- 1500
+      g.lo <- trenaViz::addGeneModelLayout(g, xPos.span=xCoordinate.span)
+      printf("---- g.lo")
+      print(g.lo)
+      g.json <- trenaViz:::.graphToJSON(g.lo)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=g.json)
       } # buildMultiModelGraph
    else{
       response <- list(cmd=msg$callback, status="success", callback="", payload="well-structured (unparsed) message")
@@ -187,6 +218,13 @@ getFootprints <- function(roi)
       # be strict for now: just the 2016 jaspar human motifs
    tbl.reg <- unique(tbl.reg[grep("Hsapiens-jaspar2016", tbl.reg$motifName, ignore.case=TRUE),])
    tbl.reg <- tbl.reg[order(tbl.reg$motifStart),]
+   printf("---- getFootprints, before associateTranscriptionFactors")
+   print(head(tbl.reg))
+   tbl.reg <- associateTranscriptionFactors(MotifDb, tbl.reg, source="MotifDb", expand.rows=TRUE)
+
+   printf("---- getFootprints, after associateTranscriptionFactors")
+   print(head(tbl.reg))
+
    tbl.bed <- tbl.reg[, c("chrom", "motifStart", "motifEnd")]
    tbl.bed$fpName <- paste(tbl.reg$motifName, tbl.reg$db, sep="_")
       # nasty hack, working around igv.js, npm, ipywidgets, docker, ???: last line in tbl is dropped
