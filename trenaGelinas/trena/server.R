@@ -229,9 +229,9 @@ getFootprints <- function(roi)
    tbl.bed$fpName <- paste(tbl.reg$motifName, tbl.reg$db, sep="_")
       # nasty hack, working around igv.js, npm, ipywidgets, docker, ???: last line in tbl is dropped
    tbl.bed <- rbind(tbl.bed, tbl.bed[nrow(tbl.bed),])
-   printf("--- writing tbl.bed")
-   write.table(tbl.bed, file="/home/trena/sharedData/tbl.bed", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
-   printf("--- after write")
+   #printf("--- writing tbl.bed")
+   #write.table(tbl.bed, file="/home/trena/sharedData/tbl.bed", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
+   #printf("--- after write")
    print(6)
    tbl.reg
 
