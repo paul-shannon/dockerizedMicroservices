@@ -197,6 +197,8 @@ getFootprints <- function(roi)
    sources <- c(source.1, source.2, source.3, source.4)
    names(sources) <- c("well_16", "well_20", "hint_16", "hint_20")
 
+   sources <- sources[4];
+
    targetGene <- "COL1A1"
    tss <- 50201632
 

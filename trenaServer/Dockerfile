@@ -7,6 +7,6 @@ WORKDIR /home/trena
 COPY . /home/trena/
 RUN R -f installTrenaServerPackages.R
 RUN R CMD INSTALL MotifDb_1.19.18.tar.gz
-RUN R CMD INSTALL trena_1.1.2.tar.gz
+RUN R CMD INSTALL trena_1.1.5.tar.gz
 
 
