@@ -1,0 +1,26 @@
+version: '3.2'
+
+services:
+
+  trena:
+    build: ./trena
+    ports:
+      - "5547:5547"
+    volumes:
+      - type: volume
+        source: gelinasSkinSharedData
+        target: /home/trena/tmp
+
+  nbserver:
+    build: ./nbserver
+    command:  start-notebook.sh --NotebookApp.base_url=/ --port=8871 --NotebookApp.token= #/home/jovyan/trenaViz/examples/basicDemo/simple.ipynb
+    ports:
+      - "8871:8871"
+    volumes:
+      - type: volume
+        source: gelinasSkinSharedData
+        target: /home/jovyan/trenaViz/tmp
+      - "./hostDir:/home/jovyan/trenaViz/hostDir"
+
+volumes:
+    gelinasSkinSharedData:

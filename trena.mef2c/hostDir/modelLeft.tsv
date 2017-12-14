@@ -1,0 +1,4 @@
+gene	betaLasso	pearsonCoeff	rfScore	betaRidge	spearmanCoeff	concordance	pcaMax	bindingSites
+NR2F1	0.9847	0.3584	282.0862	0.7843	0.3493	0.4293	1.3545	1
+PPARG	-0.0352	0.1417	216.4098	-0.0106	0.1369	0.1917	0.3267	1
+CENPB	0.4079	0.0966	215.2162	0.3974	0.0709	0.1883	0.318	1

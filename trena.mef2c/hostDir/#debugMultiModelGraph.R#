@@ -1,0 +1,16 @@
+library(trenaViz)
+PORT.RANGE <- 8000:8020
+if(!exists("tv")){
+   tv <- trenaViz(PORT.RANGE, quiet=TRUE);
+   setGenome(tv, "hg38")
+   }
+
+tbl.fpLeft <- read.table("fpLeft.tsv", sep="\t", as.is=TRUE, header=TRUE)
+tbl.fpRight <- read.table("fpRight.tsv", sep="\t", as.is=TRUE, header=TRUE)
+tbl.modelLeft <- read.table("modelLeft.tsv", sep="\t", as.is=TRUE, header=TRUE)
+tbl.modelRight <- read.table("modelRight.tsv", sep="\t", as.is=TRUE, header=TRUE)
+
+models <- list(left=list(model=tbl.modelLeft, regions=tbl.fpLeft),
+               right=list(model=tbl.modelRight, regions=tbl.fpRight))
+
+g <- buildMultiModelGraph("COL1A1", models)
