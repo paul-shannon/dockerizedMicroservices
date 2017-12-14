@@ -5,6 +5,10 @@
 # Session Data files
 .RData
 
+# large variant files
+.vcf.gz
+.vcf.gz.tbi
+
 # Example code in package build process
 *-Ex.R
 
