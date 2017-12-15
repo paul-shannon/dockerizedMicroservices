@@ -2,12 +2,15 @@
 .Rhistory
 .Rapp.history
 
-# Session Data files
-.RData
+# byte-compiled python
+*.pcy
+
+# R Data files
+*.RData
 
 # large variant files
-.vcf.gz
-.vcf.gz.tbi
+*.vcf.gz
+*.vcf.gz.tbi
 
 # Example code in package build process
 *-Ex.R

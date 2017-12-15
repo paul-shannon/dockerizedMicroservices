@@ -8,7 +8,7 @@ class Trena:
     def __init__(self, genomeName):
        socketContext = zmq.Context();
        self.trenaServer = socketContext.socket(zmq.REQ)
-       self.trenaServer.connect("tcp://trena:%s" % "5547")
+       self.trenaServer.connect("tcp://trena:%s" % "5548")
        self.tv = ipyTrenaViz()
        display(self.tv)
        self.tv.setGenome(genomeName)
@@ -17,6 +17,7 @@ class Trena:
        display(self.tv)
 
     def ping(self):
+        print("sending ping to treanServer")
         msg = {'cmd': 'ping', 'status': 'request', 'callback': '', 'payload': ''}
         self.trenaServer.send_string(json.dumps(msg))
         response = json.loads(self.trenaServer.recv_string())
@@ -39,6 +40,24 @@ class Trena:
           rownameList[i] = rownames[i]
         df = df.rename(rownameList)
         return(df)
+
+    def getModelNames(self):
+        msg = {'cmd': 'getModelNames', 'status': 'request', 'callback': '', 'payload': ''}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        return(payload)
+
+    def getModel(self, name):
+        msg = {'cmd': 'getModel', 'status': 'request', 'callback': '', 'payload': name}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        tblAsList = payload["tbl"]
+        tbl = self.dataFrameFrom3partList(tblAsList)
+        tbl.key = payload["key"]
+        return(tbl)
+
 
     def getExpressionMatrixNames(self):
         msg = {'cmd': 'getExpressionMatrixNames', 'status': 'request', 'callback': '', 'payload': ''}

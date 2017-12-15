@@ -2,12 +2,12 @@ library(rzmq)
 library(jsonlite)
 library(trena)
 library(trenaViz) # used here only for buildMultiModelGraph and addGeneLayout
-PORT <- 5547
+PORT <- 5548
 #------------------------------------------------------------------------------------------------------------------------
 # load expression matrices on startup
 #
-expression.matrix.files <- list(mayoTcs="../privateData/mayo.tcx.RData",
-                                gtexFibroblast="../mtx.rosmap.normalized.RData")
+expression.matrix.files <- list(rosmapFrontalCortex="../privateData/rosmap.fcx.RData",
+                                mayoTemporalCorex="../privateData/mayo.tcx.RData")
 expression.matrices <- list()
 
 # stash all computed objects here, to save return trips from jupyter and, especially, awkward JSON conversions of data.frams
@@ -20,7 +20,13 @@ for(matrix.name in names(expression.matrix.files)){
     eval(parse(text=sprintf("mtx <- %s", mtx.name)))
     expression.matrices[[matrix.name]] <- mtx
     }
-printf("loading cory's 2 wg models: %s", paste(load("../privateData/mef2c.tf.5kb.RData"), collapse=", "))
+
+mef2c.model.names <- load("../privateData/mef2c.tf.5kb.RData")
+printf("loading cory's 3 wg models: %s", paste(mef2c.model.names, collapse=", "))
+gene.models <- list()
+for(model.name in mef2c.model.names){
+   gene.models[[model.name]] <- eval(parse(text=model.name))
+   }
 #------------------------------------------------------------------------------------------------------------------------
 # interpret a data.frame as a list of data (a bare data.frame), columnames, and rownames
 # this makes for easy reconstruction into a pandas dataframe in python.
@@ -47,6 +53,23 @@ processWellStructuredMessage <- function(msg)
    else if(msg$cmd == "getExpressionMatrixNames"){
       info <- sort(names(expression.matrix.files))
       response <- list(cmd=msg$callback, status="success", callback="", payload=info)
+      }
+   else if(msg$cmd == "getModelNames"){
+      info <- sort(mef2c.model.names)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=info)
+      }
+   else if(msg$cmd == "getModel"){
+      modelName <- msg$payload
+      printf("--- extracting model named '%s'", modelName)
+      key <- as.character(as.numeric(Sys.time()) * 100000)
+      tbl <- gene.models[[modelName]]
+      print(key)
+      print(tail(tbl))
+      #cache[[key]] <- tbl
+      tbl.fp.as.list <- dataFrameToPandasFriendlyList(tbl)
+      #print(tbl.fp.as.list)
+      payload <- list(tbl=tbl.fp.as.list, key=key)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
       }
    else if(msg$cmd == "getFootprintsInRegion"){
       stopifnot("roi" %in% names(msg$payload))

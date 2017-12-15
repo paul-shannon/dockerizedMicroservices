@@ -5,7 +5,7 @@ services:
   trena:
     build: ./trena
     ports:
-      - "5547:5547"
+      - "5548:5548"
     volumes:
       - type: volume
         source: gelinasSkinSharedData
@@ -13,9 +13,9 @@ services:
 
   nbserver:
     build: ./nbserver
-    command:  start-notebook.sh --NotebookApp.base_url=/ --port=8871 --NotebookApp.token= #/home/jovyan/trenaViz/examples/basicDemo/simple.ipynb
+    command:  start-notebook.sh --NotebookApp.base_url=/ --port=8872 --NotebookApp.token= #/home/jovyan/trenaViz/examples/basicDemo/simple.ipynb
     ports:
-      - "8871:8871"
+      - "8872:8872"
     volumes:
       - type: volume
         source: gelinasSkinSharedData
