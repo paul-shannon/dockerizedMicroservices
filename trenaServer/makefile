@@ -1,5 +1,5 @@
 build:
-	docker build -t trenaserver ./
+	docker build -t pshannon/trenaserver ./
 
 bash:
-	docker run -ti --rm trenaserver bash
+	docker run -ti --rm pshannon/trenaserver bash
