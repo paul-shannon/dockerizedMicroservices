@@ -30,8 +30,8 @@ data.pkgs <- c("BSgenome",
                "BSgenome.Hsapiens.UCSC.hg19",
                "BSgenome.Mmusculus.UCSC.mm10",
                "org.Hs.eg.db",
-               "org.Mm.eg.db",
-               "SNPlocs.Hsapiens.dbSNP150.GRCh38")
+               "org.Mm.eg.db")
+#               "SNPlocs.Hsapiens.dbSNP150.GRCh38")
 
 for(data.pkg in data.pkgs){
    suppressWarnings(

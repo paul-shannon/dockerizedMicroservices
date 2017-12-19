@@ -6,8 +6,8 @@ PORT <- 5548
 #------------------------------------------------------------------------------------------------------------------------
 # load expression matrices on startup
 #
-expression.matrix.files <- list(rosmapFrontalCortex="../privateData/rosmap.fcx.RData",
-                                mayoTemporalCorex="../privateData/mayo.tcx.RData")
+expression.matrix.files <- list(rosmapFrontalCortex="../data/rosmap.fcx.RData",
+                                mayoTemporalCorex="../data/mayo.tcx.RData")
 expression.matrices <- list()
 
 # stash all computed objects here, to save return trips from jupyter and, especially, awkward JSON conversions of data.frams
@@ -21,12 +21,23 @@ for(matrix.name in names(expression.matrix.files)){
     expression.matrices[[matrix.name]] <- mtx
     }
 
-mef2c.model.names <- load("../privateData/mef2c.tf.5kb.RData")
+# three regulatory models provided by cory using rosmap? and +/- 5kb promoter
+mef2c.model.names <- load("../data/mef2c.tf.5kb.RData")
 printf("loading cory's 3 wg models: %s", paste(mef2c.model.names, collapse=", "))
 gene.models <- list()
 for(model.name in mef2c.model.names){
    gene.models[[model.name]] <- eval(parse(text=model.name))
    }
+
+# eqtl variants using hg38 coordinates
+printf("loading variant data: %s", load("../data/tbl.snp.hg38.score-ref-alt.RData"))
+
+# load up previously obtained footprints for a generously large region, larger than the span of
+# the mef2c eqtl snps.  uses all 4 sources: hint|wellington, seed 20/16
+printf("loading footprints: %s", load("../data/tbl.fp.chr5.88615025-89052115.4sources.noDups.RData"))
+# we will check incoming fp(roi) requests against what we already have
+fp.roi <- list(chrom="chr5", start=88615025, end=89052115)  # "chr5:88,615,025-89,052,115"
+
 #------------------------------------------------------------------------------------------------------------------------
 # interpret a data.frame as a list of data (a bare data.frame), columnames, and rownames
 # this makes for easy reconstruction into a pandas dataframe in python.
@@ -60,14 +71,21 @@ processWellStructuredMessage <- function(msg)
       }
    else if(msg$cmd == "getModel"){
       modelName <- msg$payload
-      printf("--- extracting model named '%s'", modelName)
       key <- as.character(as.numeric(Sys.time()) * 100000)
       tbl <- gene.models[[modelName]]
-      print(key)
-      print(tail(tbl))
-      #cache[[key]] <- tbl
+      cache[[key]] <- tbl
       tbl.fp.as.list <- dataFrameToPandasFriendlyList(tbl)
-      #print(tbl.fp.as.list)
+      payload <- list(tbl=tbl.fp.as.list, key=key)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
+      }
+   else if(msg$cmd == "getVariants"){
+      thresholdScore <- msg$payload$minScore
+      tbl.snp$filteringScore <- -log10(tbl.snp$CER_P)
+      tbl.var <- subset(tbl.snp, filteringScore >= thresholdScore)[, c("chrom", "pos", "pos", "rsid", "filteringScore")]
+      colnames(tbl.var) <- c("chrom", "start", "end", "id", "score")
+      rownames(tbl.var) <- NULL
+      key <- as.character(as.numeric(Sys.time()) * 100000)
+      tbl.fp.as.list <- dataFrameToPandasFriendlyList(tbl.var)
       payload <- list(tbl=tbl.fp.as.list, key=key)
       response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
       }
@@ -209,24 +227,30 @@ summarizeExpressionMatrices <- function()
 
 } # summarizeExpressionMatrices
 #------------------------------------------------------------------------------------------------------------------------
-getFootprints <- function(roi)
+getFootprints <- function(roiString)
 {
+   roi <- parseChromLocString(roiString)   # a trena function
+   if(roi$chrom == fp.roi$chrom &
+      roi$start >= fp.roi$start &
+      roi$end   <= fp.roi$end) {
+      tbl.roi <- subset(tbl.fp, chrom==roi$chrom & motifStart >= roi$start & motifEnd <= roi$end)
+      return(tbl.roi)
+      }
+
    trena <- Trena("hg38")
-   source.1 <- "postgres://bddsrds.globusgenomics.org/skin_wellington_16"
-   source.2 <- "postgres://bddsrds.globusgenomics.org/skin_wellington_20"
-   source.3 <- "postgres://bddsrds.globusgenomics.org/skin_hint_16"
-   source.4 <- "postgres://bddsrds.globusgenomics.org/skin_hint_20"
+   source.1 <- "postgres://bddsrds.globusgenomics.org/brain_wellington_16"
+   source.2 <- "postgres://bddsrds.globusgenomics.org/brain_wellington_20"
+   source.3 <- "postgres://bddsrds.globusgenomics.org/brain_hint_16"
+   source.4 <- "postgres://bddsrds.globusgenomics.org/brain_hint_20"
    sources <- c(source.1, source.2, source.3, source.4)
    names(sources) <- c("well_16", "well_20", "hint_16", "hint_20")
 
-   sources <- sources[4];
+   #sources <- sources[4];
 
-   targetGene <- "COL1A1"
-   tss <- 50201632
+   targetGene <- "MEF2C"
+   tss <- 88904257
 
-   cls <- parseChromLocString(roi)   # a trena function
-
-   x <- getRegulatoryChromosomalRegions(trena, cls$chrom, cls$start, cls$end, sources, targetGene, tss)
+   x <- getRegulatoryChromosomalRegions(trena, roi$chrom, roi$start, roi$end, sources, targetGene, tss)
    print(1)
    names(x) <- names(sources)
    print(2)
@@ -294,4 +318,33 @@ if(!interactive()) {
      } # while (TRUE)
 
 } # if !interactive()
+#------------------------------------------------------------------------------------------------------------------------
+test_getFootprints <- function()
+{
+   printf("--- test_getFootprints")
+
+    # fp.roi specifies the range for which we already have footprints
+   test.roi <- fp.roi
+   test.roi$start <- test.roi$start + 10000
+   test.roi$end <- test.roi$start + 20000
+   test.roi.string <- with(test.roi, sprintf("%s:%d-%d", chrom, start, end))
+   fp.roi.string <- with(fp.roi, sprintf("%s:%d-%d", chrom, start, end))
+   tbl.fp.dup <- getFootprints(fp.roi.string)
+     #checkEquals(dim(tbl.fp), dim(tbl.fp.dup))
+   tbl.test <- getFootprints(test.roi.string)
+   checkEquals(nrow(tbl.test), 203)
+   checkEquals(ncol(tbl.test), 12)
+
+   outOfRange.roi <- sprintf("%s:%d-%d", fp.roi$chrom, fp.roi$end + 10, fp.roi$end+1000)
+   tbl.outOfRange <- getFootprints(outOfRange.roi)
+   checkTrue(nrow(tbl.outOfRange) > 20)
+   checkEquals(ncol(tbl.outOfRange), 12)
+
+} # test_getFootprints
+#------------------------------------------------------------------------------------------------------------------------
+runTests <- function()
+{
+   test_getFootprints()
+
+} # runTests
 #------------------------------------------------------------------------------------------------------------------------

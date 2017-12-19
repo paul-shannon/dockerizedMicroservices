@@ -58,6 +58,18 @@ class Trena:
         tbl.key = payload["key"]
         return(tbl)
 
+    def getVariants(self, minScore, display, color, trackHeight=50):
+        msg = {'cmd': 'getVariants', 'status': 'request', 'callback': '',
+               'payload': {'minScore': minScore}}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+        tblAsList = payload["tbl"]
+        tbl = self.dataFrameFrom3partList(tblAsList)
+        tbl.key = payload["key"]
+        if(display):
+           self.tv.addBedTrackFromDataFrame(tbl, "variants %4.2f" % minScore, "SQUISHED", color, trackHeight)
+        return(tbl)
 
     def getExpressionMatrixNames(self):
         msg = {'cmd': 'getExpressionMatrixNames', 'status': 'request', 'callback': '', 'payload': ''}
@@ -75,27 +87,16 @@ class Trena:
 
     def getFootprintsInRegion(self, display):
         payload = {"roi": self.getGenomicRegion()}
-        print("gfir 1")
-        print("current working directory: %s" % os.getcwd())
         msg = {'cmd': 'getFootprintsInRegion', 'status': 'request', 'callback': '', 'payload': payload}
-        print("gfir 2")
         self.trenaServer.send_string(json.dumps(msg))
-        print("gfir 3")
         response = json.loads(self.trenaServer.recv_string())
-        print("gfir 4")
         payload = response["payload"]
-        print("gfir 5")
 
         tblAsList = payload["tbl"]
-        print("gfir 6")
         regTbl = self.dataFrameFrom3partList(tblAsList)
-        print("gfir 7")
         regTbl.key = payload["key"]
-        print("gfir 8")
         if(display):
-           print("about to call self.tv.addBedTrackFromDataFrame")
            self.tv.addBedTrackFromDataFrame(regTbl, "footprints", "EXPANDED", "blue")
-           print("gfir 9")
         return(regTbl)
 
     def displayFootprints(self, url):

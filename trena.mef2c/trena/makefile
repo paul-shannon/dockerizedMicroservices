@@ -1,8 +1,8 @@
 build:
-	docker build -t testgelinastrena .
+	docker build -t trena.mef2c .
 
 bash:
-	docker run -ti --rm testgelinastrena bash
+	docker run -ti --rm trena.mef2c bash
 
 shared:
 	docker volume create myTest
