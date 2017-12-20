@@ -3,6 +3,8 @@ library(jsonlite)
 library(trena)
 library(trenaViz) # used here only for buildMultiModelGraph and addGeneLayout
 PORT <- 5548
+targetGene <- "MEF2C"
+targetGene.tss <- 88904257
 #------------------------------------------------------------------------------------------------------------------------
 # load expression matrices on startup
 #
@@ -38,6 +40,31 @@ printf("loading footprints: %s", load("../data/tbl.fp.chr5.88615025-89052115.4so
 # we will check incoming fp(roi) requests against what we already have
 fp.roi <- list(chrom="chr5", start=88615025, end=89052115)  # "chr5:88,615,025-89,052,115"
 
+#------------------------------------------------------------------------------------------------------------------------
+# precalculate two dhs/encode tables:
+#
+#  1) tbl.dhs:  all the open chromatin regions in fp.roi
+#  2) tbl.dhsMotif:  all the jaspar2016/hsapiens motifs above threshold in those dhs regions
+#
+# 1) tbl.dhs <- getEncodeDHSRegions("hg38", "wgEncodeRegDnaseClustered", "chr5", fp.roi$start, fp.roi$end)
+#    colnames(tbl.dhs) <- c("chrom", "start", "end", "count", "score")
+#    save(tbl.dhs, file="../data/tbl.dhs.RData")
+#
+# 2)
+#    sources <- c("encodeHumanDHS")
+#    trena <- Trena("hg38")
+#    tbl.dhsMotifs <- getRegulatoryChromosomalRegions(trena, fp.roi$chrom, fp.roi$start, fp.roi$end, sources,
+#                                                     targetGene, targetGene.tss)
+#    tbl.dhsMotifs <- tbl.dhsMotifs[[1]]
+#    dups <- which(duplicated(tbl.dhsMotifs[, c(1,2,3,5)]))
+#     if(length(dups) > 0)
+#        tbl.dhsMotifs <- tbl.dhsMotifs[-dups,]
+#     dim(tbl.dhsMotifs) # 28872 9
+#     save(tbl.dhsMotifs, file="../data/tbl.dhsMotifs.RData")
+#------------------------------------------------------------------------------------------------------------------------
+# load the open chromatin (dhs) table
+printf("loading dhs regions: %s", load("../data/tbl.dhs.RData"))
+printf("loading motifs in dhs regions: %s", load("../data/tbl.dhsMotifs.RData"))
 #------------------------------------------------------------------------------------------------------------------------
 # interpret a data.frame as a list of data (a bare data.frame), columnames, and rownames
 # this makes for easy reconstruction into a pandas dataframe in python.
@@ -99,6 +126,35 @@ processWellStructuredMessage <- function(msg)
       payload <- list(tbl=tbl.fp.as.list, key=key)
       response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
       }
+   else if(msg$cmd == "getDHSRegionsInRegion"){
+      stopifnot("roi" %in% names(msg$payload))
+      tbl.dhs.roi <- getDHSRegions(roi)
+      if(nrow(tbl.dhs.ro1) == 0){
+         response <- list(cmd=msg$callback, status="failure", callback="", payload="no overlapping regions");
+         }
+      else{
+         key <- as.character(as.numeric(Sys.time()) * 100000)
+         cache[[key]] <- tbl.dhs.roi
+         tbl.fp.as.list <- dataFrameToPandasFriendlyList(tbl.dhs.roi)
+         payload <- list(tbl=tbl.fp.as.list, key=key)
+         response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
+         } # else: some overlap found
+      } # getDHsRegionsInRegion
+   else if(msg$cmd == "getDHSMotifsInRegion"){
+      stopifnot("roi" %in% names(msg$payload))
+      roi <- msg$payload$roi
+      tbl.reg <- getDHSMotifs(roi)
+      if(nrow(tbl.reg) == 0){
+         response <- list(cmd=msg$callback, status="failure", callback="", payload="no motifs in region");
+         }
+      else{
+         key <- as.character(as.numeric(Sys.time()) * 100000)
+         cache[[key]] <- tbl.reg
+         tbl.fp.as.list <- dataFrameToPandasFriendlyList(tbl.reg)
+         payload <- list(tbl=tbl.fp.as.list, key=key)
+         response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
+         }
+      } # getDHSMotifsInRegion
    else if(msg$cmd == "listSharedData"){
       filenames <- list.files("/home/trena/sharedData")
       response <- list(cmd=msg$callback, status="success", callback="", payload=filenames);
@@ -233,7 +289,7 @@ getFootprints <- function(roiString)
    if(roi$chrom == fp.roi$chrom &
       roi$start >= fp.roi$start &
       roi$end   <= fp.roi$end) {
-      tbl.roi <- subset(tbl.fp, chrom==roi$chrom & motifStart >= roi$start & motifEnd <= roi$end)
+      tbl.roi <- subset(tbl.fp, chrom==roi$chrom & start >= roi$start & end <= roi$end)
       return(tbl.roi)
       }
 
@@ -247,10 +303,8 @@ getFootprints <- function(roiString)
 
    #sources <- sources[4];
 
-   targetGene <- "MEF2C"
-   tss <- 88904257
 
-   x <- getRegulatoryChromosomalRegions(trena, roi$chrom, roi$start, roi$end, sources, targetGene, tss)
+   x <- getRegulatoryChromosomalRegions(trena, roi$chrom, roi$start, roi$end, sources, targetGene, targetGene.tss)
    print(1)
    names(x) <- names(sources)
    print(2)
@@ -270,13 +324,11 @@ getFootprints <- function(roiString)
    print(head(tbl.reg))
    tbl.reg <- associateTranscriptionFactors(MotifDb, tbl.reg, source="MotifDb", expand.rows=TRUE)
 
-   printf("---- getFootprints, after associateTranscriptionFactors")
-   print(head(tbl.reg))
+   #printf("---- getFootprints, after associateTranscriptionFactors")
+   #print(head(tbl.reg))
 
-   tbl.bed <- tbl.reg[, c("chrom", "motifStart", "motifEnd")]
-   tbl.bed$fpName <- paste(tbl.reg$motifName, tbl.reg$db, sep="_")
       # nasty hack, working around igv.js, npm, ipywidgets, docker, ???: last line in tbl is dropped
-   tbl.bed <- rbind(tbl.bed, tbl.bed[nrow(tbl.bed),])
+   colnames(tbl.reg)[2:3] <- c("start", "end")
    #printf("--- writing tbl.bed")
    #write.table(tbl.bed, file="/home/trena/sharedData/tbl.bed", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
    #printf("--- after write")
@@ -284,6 +336,22 @@ getFootprints <- function(roiString)
    tbl.reg
 
 } # getFootprints
+#------------------------------------------------------------------------------------------------------------------------
+getDHSRegions <- function(roiString)
+{
+   roi <- parseChromLocString(roiString)   # a trena function
+   tbl.roi <- subset(tbl.dhs, chrom==roi$chrom & start >= roi$start & end <= roi$end)
+   return(tbl.roi)
+
+} # getDHSRegions
+#------------------------------------------------------------------------------------------------------------------------
+getDHSMotifs <- function(roiString)
+{
+   roi <- parseChromLocString(roiString)   # a trena function
+   tbl.roi <- subset(tbl.dhsMotifs, chrom==roi$chrom & start >= roi$start & end <= roi$end)
+   return(tbl.roi)
+
+} # getDHSMotifs
 #------------------------------------------------------------------------------------------------------------------------
 if(!interactive()) {
 
@@ -329,22 +397,57 @@ test_getFootprints <- function()
    test.roi$end <- test.roi$start + 20000
    test.roi.string <- with(test.roi, sprintf("%s:%d-%d", chrom, start, end))
    fp.roi.string <- with(fp.roi, sprintf("%s:%d-%d", chrom, start, end))
-   tbl.fp.dup <- getFootprints(fp.roi.string)
-     #checkEquals(dim(tbl.fp), dim(tbl.fp.dup))
+
    tbl.test <- getFootprints(test.roi.string)
    checkEquals(nrow(tbl.test), 203)
    checkEquals(ncol(tbl.test), 12)
+   checkEquals(colnames(tbl.test)[1:3], c("chrom", "start", "end"))
 
    outOfRange.roi <- sprintf("%s:%d-%d", fp.roi$chrom, fp.roi$end + 10, fp.roi$end+1000)
    tbl.outOfRange <- getFootprints(outOfRange.roi)
    checkTrue(nrow(tbl.outOfRange) > 20)
    checkEquals(ncol(tbl.outOfRange), 12)
+   checkEquals(colnames(tbl.outOfRange)[1:3], c("chrom", "start", "end"))
 
 } # test_getFootprints
+#------------------------------------------------------------------------------------------------------------------------
+test_getDHSRegions <- function()
+{
+   printf("--- test_getDHSRegions")
+
+   test.roi <- fp.roi
+   test.roi$start <- test.roi$start + 10000
+   test.roi$end <- test.roi$start + 20000
+   test.roi.string <- with(test.roi, sprintf("%s:%d-%d", chrom, start, end))
+   fp.roi.string <- with(fp.roi, sprintf("%s:%d-%d", chrom, start, end))
+
+   tbl.dhs.new <- getDHSRegions(fp.roi.string)
+   checkEquals(dim(tbl.dhs), dim(tbl.dhs.new))
+   checkEquals(colnames(tbl.dhs)[1:3], c("chrom", "start", "end"))
+
+} # test_getDHSRegions
+#------------------------------------------------------------------------------------------------------------------------
+test_getDHSMotifs <- function()
+{
+   printf("--- test_getDHSMotifs")
+
+   test.roi <- fp.roi
+   test.roi$start <- test.roi$start + 10000
+   test.roi$end <- test.roi$start + 20000
+   test.roi.string <- with(test.roi, sprintf("%s:%d-%d", chrom, start, end))
+   fp.roi.string <- with(fp.roi, sprintf("%s:%d-%d", chrom, start, end))
+
+   tbl.dhs.new <- getDHSMotifs(fp.roi.string)
+   checkEquals(dim(tbl.dhsMotifs), dim(tbl.dhs.new))
+   checkEquals(colnames(tbl.dhs.new)[1:3], c("chrom", "start", "end"))
+
+} # test_getDHSRegions
 #------------------------------------------------------------------------------------------------------------------------
 runTests <- function()
 {
    test_getFootprints()
+   test_getDHSRegions()
+   test_getDHSMotifs()
 
 } # runTests
 #------------------------------------------------------------------------------------------------------------------------
