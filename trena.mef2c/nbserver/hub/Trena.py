@@ -68,7 +68,7 @@ class Trena:
         tbl = self.dataFrameFrom3partList(tblAsList)
         tbl.key = payload["key"]
         if(display):
-           self.tv.addBedTrackFromDataFrame(tbl, "variants %4.2f" % minScore, "SQUISHED", color, trackHeight)
+           self.tv.addBedTrackFromDataFrame(tbl, "variants >= %4.2f" % minScore, "SQUISHED", color, trackHeight)
         return(tbl)
 
     def getExpressionMatrixNames(self):
@@ -96,8 +96,50 @@ class Trena:
         regTbl = self.dataFrameFrom3partList(tblAsList)
         regTbl.key = payload["key"]
         if(display):
-           self.tv.addBedTrackFromDataFrame(regTbl, "footprints", "EXPANDED", "blue")
+           self.tv.addBedTrackFromDataFrame(regTbl, "footprints", "SQUISHED", "blue")
         return(regTbl)
+
+    def getDHSinRegion(self, display):
+        payload = {"roi": self.getGenomicRegion()}
+        msg = {'cmd': 'getDHSRegionsInRegion', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+
+        tblAsList = payload["tbl"]
+        regTbl = self.dataFrameFrom3partList(tblAsList)
+        regTbl.key = payload["key"]
+        if(display):
+           self.tv.addBedTrackFromDataFrame(regTbl, "DHS", "SQUISHED", "darkreen")
+        return(regTbl)
+
+    def getDHSMotifsinRegion(self, display):
+        payload = {"roi": self.getGenomicRegion()}
+        msg = {'cmd': 'getDHSMotifsInRegion', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+
+        tblAsList = payload["tbl"]
+        regTbl = self.dataFrameFrom3partList(tblAsList)
+        regTbl.key = payload["key"]
+        if(display):
+           self.tv.addBedTrackFromDataFrame(regTbl, "DHS motifs", "SQUISHED", "magenta")
+        return(regTbl)
+
+    def findVariantsInModel(modelName, shoulder, display):
+        payload = {"modelName": modelName, "shoulder": shoulder};
+        msg = {'cmd': 'findVariantsInModel', 'status': 'request', 'callback': '', 'payload': payload}
+        self.trenaServer.send_string(json.dumps(msg))
+        response = json.loads(self.trenaServer.recv_string())
+        payload = response["payload"]
+
+        tblAsList = payload["tbl"]
+        varTbl = self.dataFrameFrom3partList(tblAsList)
+        varTbl.key = payload["key"]
+        if(display):
+           self.tv.addBedTrackFromDataFrame(regTbl, "snps in model", "SQUISHED", "darkred")
+        return(varTbl)
 
     def displayFootprints(self, url):
         self.tv.addBedTrackFromDataFrame(url)

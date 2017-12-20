@@ -59,12 +59,25 @@ fp.roi <- list(chrom="chr5", start=88615025, end=89052115)  # "chr5:88,615,025-8
 #    dups <- which(duplicated(tbl.dhsMotifs[, c(1,2,3,5)]))
 #     if(length(dups) > 0)
 #        tbl.dhsMotifs <- tbl.dhsMotifs[-dups,]
+#     tbl.dhsMotifs <- associateTranscriptionFactors(MotifDb, tbl.dhsMotifs, source="MotifDb", expand.rows=TRUE)
 #     dim(tbl.dhsMotifs) # 28872 9
 #     save(tbl.dhsMotifs, file="../data/tbl.dhsMotifs.RData")
 #------------------------------------------------------------------------------------------------------------------------
 # load the open chromatin (dhs) table
 printf("loading dhs regions: %s", load("../data/tbl.dhs.RData"))
 printf("loading motifs in dhs regions: %s", load("../data/tbl.dhsMotifs.RData"))
+#------------------------------------------------------------------------------------------------------------------------
+# obtain all motifs, independent of chromatin state and footprints, across the entire extended region
+#    pfms <- as.list(query(query(MotifDb, "jaspar2016"), "hsapiens"))
+#    mm <- MotifMatcher(genomeName="hg38", pfms)
+#    tbl.allDNAMotifs <- findMatchesByChromosomalRegion(mm, as.data.frame(fp.roi), pwmMatchMinimumAsPercentage=85)
+#    tbl.allDNAMotifs <- associateTranscriptionFactors(MotifDb, tbl.allDNAMotifs, source="MotifDb", expand.rows=TRUE)
+# pull out the standard columns
+#    tbl.allDNAMotifs <- tbl.allDNAMotifs[, c("chrom", "motifStart", "motifEnd", "motifName", "strand", "motifRelativeScore", "geneSymbol")]
+# rename start and end
+#    colnames(tbl.allDNAMotifs)[2:3] <- c("start", "end")
+#    save(tbl.allDNAMotifs, file="../data/tbl.allDNAMotifs.RData")   # 233600 x 14
+printf("loading motifs found across all DNA: %s", load("../data/tbl.allDNAMotifs.RData"))
 #------------------------------------------------------------------------------------------------------------------------
 # interpret a data.frame as a list of data (a bare data.frame), columnames, and rownames
 # this makes for easy reconstruction into a pandas dataframe in python.
@@ -128,8 +141,9 @@ processWellStructuredMessage <- function(msg)
       }
    else if(msg$cmd == "getDHSRegionsInRegion"){
       stopifnot("roi" %in% names(msg$payload))
+      roi = msg$payload$roi
       tbl.dhs.roi <- getDHSRegions(roi)
-      if(nrow(tbl.dhs.ro1) == 0){
+      if(nrow(tbl.dhs.roi) == 0){
          response <- list(cmd=msg$callback, status="failure", callback="", payload="no overlapping regions");
          }
       else{
@@ -155,6 +169,18 @@ processWellStructuredMessage <- function(msg)
          response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
          }
       } # getDHSMotifsInRegion
+   else if(msg$cmd == "findVariantsInModel"){
+      stopifnot("modelName" %in% names(msg$payload))
+      stopifnot("shoulder" %in% names(msg$payload))
+      modelName <- msg$payload$modelName
+      shoulder <- msg$payload$shoulder
+      tbl.var <- findVariantsInModel(modelName, shoulder)
+      key <- as.character(as.numeric(Sys.time()) * 100000)
+      cache[[key]] <- tbl.var
+      tbl.fp.as.list <- dataFrameToPandasFriendlyList(tbl.var)
+      payload <- list(tbl=tbl.fp.as.list, key=key)
+      response <- list(cmd=msg$callback, status="success", callback="", payload=payload);
+      }
    else if(msg$cmd == "listSharedData"){
       filenames <- list.files("/home/trena/sharedData")
       response <- list(cmd=msg$callback, status="success", callback="", payload=filenames);
@@ -205,7 +231,7 @@ processWellStructuredMessage <- function(msg)
       print(head(tbl.motifs))
 
       tbl.motifs.tfs <- associateTranscriptionFactors(MotifDb, tbl.motifs, source=tfMap, expand.rows=FALSE)
-      print(head(tbl.motifs.tfs))
+      #print(head(tbl.motifs.tfs))
 
       mtx <- expression.matrices[[matrixName]]
       stopifnot(targetGene %in% rownames(mtx))
@@ -353,6 +379,71 @@ getDHSMotifs <- function(roiString)
 
 } # getDHSMotifs
 #------------------------------------------------------------------------------------------------------------------------
+findVariantsInModel <- function(modelName, shoulder)
+{
+      #--------------------------------------------------------------------------------
+      # clean up the snps dataframe, putting it in good bed file style
+      # we then look, below, for intersections of these locations with
+      # 3 sources for motifs:  bdds footprints, in encode dhs clustered, in all DNA
+      #--------------------------------------------------------------------------------
+
+   tbl.snp.clean <- tbl.snp[, c("chrom", "pos", "pos")]
+   colnames(tbl.snp.clean) <- c("chrom", "start", "end")
+   gr.snp <- GRanges(tbl.snp.clean)
+
+      #--------------------------------------------------------------------------------
+      # do the bdds footprints firest
+      #--------------------------------------------------------------------------------
+
+   gr.fp <- GRanges(tbl.fp)
+   tbl.fp.ov <- as.data.frame(findOverlaps(gr.snp, gr.fp, maxgap=shoulder))
+   colnames(tbl.fp.ov) <- c("snp", "fp")
+
+   tbl.fpHits <- cbind(tbl.snp[tbl.fp.ov$snp,], tbl.fp[tbl.fp.ov$fp, "geneSymbol", drop=FALSE ])
+   tbl.fpHits <- unique(subset(tbl.fpHits, geneSymbol %in% gene.models[[modelName]]$gene))
+   tbl.fpHits$modelName <- modelName
+   tbl.fpHits$shoulder <- shoulder
+   tbl.fpHits$source <- "hint+wellington, 16+20 footprints"
+
+      #--------------------------------------------------------------------------------
+      # now the motifs found in encode open chromatin
+      #--------------------------------------------------------------------------------
+
+   gr.dhsMotifs <- GRanges(tbl.dhsMotifs)
+   tbl.dhs.ov <- as.data.frame(findOverlaps(gr.snp, gr.dhsMotifs, maxgap=shoulder))
+   colnames(tbl.dhs.ov) <- c("snp", "dhsMotif")
+
+   tbl.dhsMotifHits <- cbind(tbl.snp[tbl.dhs.ov$snp,],
+                             tbl.dhsMotifs[tbl.dhs.ov$dhsMotif, c("geneSymbol"), drop=FALSE])
+   tbl.dhsMotifHits <- unique(subset(tbl.dhsMotifHits, geneSymbol %in% gene.models[[modelName]]$gene))
+   tbl.dhsMotifHits$modelName <- modelName
+   tbl.dhsMotifHits$shoulder <- shoulder
+   tbl.dhsMotifHits$source <- "encode DHS motifs"
+
+      #--------------------------------------------------------------------------------
+      # now the motifs found in *all* dna
+      #--------------------------------------------------------------------------------
+   gr.allDNAMotifs <- GRanges(tbl.allDNAMotifs)
+   tbl.all.ov <- as.data.frame(findOverlaps(gr.snp, gr.allDNAMotifs, maxgap=shoulder))
+   colnames(tbl.all.ov) <- c("snp", "allMotif")
+
+   tbl.allMotifHits <- cbind(tbl.snp[tbl.all.ov$snp,],
+                             tbl.allDNAMotifs[tbl.all.ov$allMotif, c("geneSymbol"), drop=FALSE])
+   tbl.allMotifHits <- unique(subset(tbl.allMotifHits, geneSymbol %in% gene.models[[modelName]]$gene))
+   tbl.allMotifHits$modelName <- modelName
+   tbl.allMotifHits$shoulder <- shoulder
+   tbl.allMotifHits$source <- "all DNA motifs"
+
+
+   tbl.out <- rbind(tbl.fpHits, tbl.dhsMotifHits)
+   tbl.out <- rbind(tbl.out, tbl.allMotifHits)
+   tbl.out$tfRank <- match(tbl.out$geneSymbol, gene.models[[model.name]]$gene)
+   rownames(tbl.out) <- NULL
+
+   tbl.out
+
+} # findVariantsInModel
+#------------------------------------------------------------------------------------------------------------------------
 if(!interactive()) {
 
    context = init.context()
@@ -443,11 +534,40 @@ test_getDHSMotifs <- function()
 
 } # test_getDHSRegions
 #------------------------------------------------------------------------------------------------------------------------
+test_findVariantsInModel <- function()
+{
+   printf("--- test_findVariantsInModel")
+   tbl.00 <- findVariantsInModel(modelName="mef2c.ros", shoulder=0)
+   checkEquals(dim(tbl.00), c(19, 23))
+
+   tbl.xtab <- as.data.frame(table(tbl.00$source), stringsAsFactors=FALSE)
+   checkEquals(tbl.xtab$Var1, c("all DNA motifs", "encode DHS motifs", "hint+wellington, 16+20 footprints"))
+   checkEquals(tbl.xtab$Freq, c(13, 3, 3))
+
+   tbl.xtab <- as.data.frame(table(tbl.00$geneSymbol), stringsAsFactors=FALSE)
+   checkEquals(tbl.xtab$Var1, c("EMX1", "FOXO6", "FOXP1", "HLF", "NFATC3", "ZNF740"))
+   checkEquals(tbl.xtab$Freq, c(3, 4, 2, 2, 5, 3))
+
+      # for a digestible view:
+   coi <- c(1,2,3,4,6,7, 17, 19, 23, 20, 21, 22)
+      #    tbl.00[, coi]
+   tbl.05 <- findVariantsInModel(modelName="mef2c.ros", shoulder=5)
+   tbl.xtab <- as.data.frame(table(tbl.05$source), stringsAsFactors=FALSE)
+   checkEquals(tbl.xtab$Var1, c("all DNA motifs", "encode DHS motifs", "hint+wellington, 16+20 footprints"))
+   checkEquals(tbl.xtab$Freq, c(28, 7, 4))
+
+   tbl.xtab <- as.data.frame(table(tbl.05$geneSymbol), stringsAsFactors=FALSE)
+   checkEquals(tbl.xtab$Var1, c("EMX1", "FOXO6", "FOXP1", "HLF", "NFATC3", "SCRT1", "ZNF740"))
+   checkEquals(tbl.xtab$Freq, c(9, 9, 2, 2, 13, 1, 3))
+
+} # test_findVariantsInModel
+#------------------------------------------------------------------------------------------------------------------------
 runTests <- function()
 {
    test_getFootprints()
    test_getDHSRegions()
    test_getDHSMotifs()
+   test_findVariantsInModel()
 
 } # runTests
 #------------------------------------------------------------------------------------------------------------------------
