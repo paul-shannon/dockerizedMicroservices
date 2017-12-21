@@ -2,6 +2,7 @@ library(rzmq)
 library(jsonlite)
 library(trena)
 library(trenaViz) # used here only for buildMultiModelGraph and addGeneLayout
+library(RUnit)
 PORT <- 5548
 targetGene <- "MEF2C"
 targetGene.tss <- 88904257
@@ -27,8 +28,8 @@ for(matrix.name in names(expression.matrix.files)){
 mef2c.model.names <- load("../data/mef2c.tf.5kb.RData")
 printf("loading cory's 3 wg models: %s", paste(mef2c.model.names, collapse=", "))
 gene.models <- list()
-for(model.name in mef2c.model.names){
-   gene.models[[model.name]] <- eval(parse(text=model.name))
+for(name in mef2c.model.names){
+   gene.models[[name]] <- eval(parse(text=name))
    }
 
 # eqtl variants using hg38 coordinates
@@ -79,6 +80,66 @@ printf("loading motifs in dhs regions: %s", load("../data/tbl.dhsMotifs.RData"))
 #    save(tbl.allDNAMotifs, file="../data/tbl.allDNAMotifs.RData")   # 233600 x 14
 printf("loading motifs found across all DNA: %s", load("../data/tbl.allDNAMotifs.RData"))
 #------------------------------------------------------------------------------------------------------------------------
+# load in the normalized tcx matrix whose samples (columns) correspond to pheno and geno information.
+# prepared like this:
+#     ~/s/work/priceLab/AD/expression.matrix.prep
+#     prepareMatrices.R starts off like this:
+#        load("ampADMayo.64253genes.278samples.RData")
+#        stopifnot(dim(mtx) == c(64253, 278))
+#        covariates.file <- "AMP-AD_MayoBB_UFL-Mayo-ISB_IlluminaHiSeq2000_TCX_Covariates_Flowcell_1.csv"
+#     and produces
+#        print(load("~/s/work/priceLab/AD/expression.matrix.prep/prepped.tcx.matrices.RData"))
+#           "mtx.tcx"     "mtx.tcx.ctl" "mtx.tcx.ad"
+#	fivenum(mtx.tcx); fivenum(mtx.tcx.ctl); fivenum(mtx.tcx.ad)
+#          [1] 0.000000e+00 2.269386e+00 1.384377e+01 4.185981e+01 6.446054e+05
+#          [1] -9.965784  1.152255  3.758768  5.350882 19.298057
+#          [1] -9.965784  1.233155  3.814262  5.387233 17.440484
+#       dim(mtx.tcx); dim(mtx.tcx.ctl); dim(mtx.tcx.ad)
+#          [1] 18281   278
+#          [1] 18281    80
+#          [1] 18281    84
+#       mtx.tcx.normalized <- asinh(mtx.tcx)
+#       fivenum(mtx.tcx.normalized)
+#          [1]  0.000000  1.558003  3.322285  4.427616 14.069541
+#       head(colnames(mtx.tcx.normalized))
+#          [1] "S11344_TCX" "S11316_TCX" "S11431_TCX" "S11341_TCX" "S11289_TCX" "S11327_TCX"
+#       samples.mtx <- sub("^S", "", colnames(mtx.tcx.normalized))
+#       samples.mtx <- sub("_TCX", "", samples.mtx)
+#       colnames(mtx.tcx.normalized) <- samples.mtx
+#
+#       length(samples.mtx)  # [1] 278
+#       length(samples.geno) # [1] 349
+#       length(intersect(samples.mtx, samples.geno)) # [1] 263
+#
+#    covariates.file <- "~/s/work/priceLab/AD/expression.matrix.prep/AMP-AD_MayoBB_UFL-Mayo-ISB_IlluminaHiSeq2000_TCX_Covariates_Flowcell_1.csv"
+#    tbl.covariates <- read.table(covariates.file, sep=",", as.is=TRUE, header=TRUE)
+#    dim(tbl.covariates) # [1] 278   8
+#    as.data.frame(table(tbl.covariates$Diagnosis))
+#                     Var1 Freq
+#       1               AD   84
+#       2          Control   80
+#       3 Pathologic Aging   30
+#       4              PSP   84
+#    tbl.covariates$sample <- gsub("_TCX", "", tbl.covariates$ID)
+#    length(intersect(samples.geno, tbl.covariates$sample))  # [1] 263
+#    tbl.pheno <- subset(tbl.covariates, sample %in% samples.geno)  # 263 9
+#    as.data.frame(table(tbl.pheno$Diagnosis))
+#                  Var1 Freq
+#    1               AD   79
+#    2          Control   73
+#    3 Pathologic Aging   30
+#    4              PSP   81
+#    samples.ad <- subset(tbl.pheno, Diagnosis=="AD")$sample
+#    samples.ctl <- subset(tbl.pheno, Diagnosis=="Control")$sample
+#    cor(mtx.tcx.normalized["MEF2C", samples.ctl], mtx.tcx.normalized["NFATC3", samples.ctl])  # [1] -0.8153529
+#    cor(mtx.tcx.normalized["MEF2C", samples.ad], mtx.tcx.normalized["NFATC3", samples.ad])    # [1] -0.7929382
+#
+#    save(tbl.pheno, mtx.geno, samples.ad, samples.ctl, mtx.tcx.normalized, file="~/github/dockerizedMicroservices/trena.mef2c/trena/data/mtx.tcx.pheno.geno.RData")
+#    load("~/github/dockerizedMicroservices/trena.mef2c/trena/data/mtx.tcx.pheno.geno.RData")
+#
+#
+printf("loading expression, pheno and geno: %s", paste(load("~/github/dockerizedMicroservices/trena.mef2c/trena/data/mtx.tcx.pheno.geno.RData"), collapse=", "))
+#
 # interpret a data.frame as a list of data (a bare data.frame), columnames, and rownames
 # this makes for easy reconstruction into a pandas dataframe in python.
 dataFrameToPandasFriendlyList <- function(tbl)
@@ -379,7 +440,7 @@ getDHSMotifs <- function(roiString)
 
 } # getDHSMotifs
 #------------------------------------------------------------------------------------------------------------------------
-findVariantsInModel <- function(modelName, shoulder)
+findVariantsInModel <- function(modelName, shoulder, motifSources)
 {
       #--------------------------------------------------------------------------------
       # clean up the snps dataframe, putting it in good bed file style
@@ -387,62 +448,138 @@ findVariantsInModel <- function(modelName, shoulder)
       # 3 sources for motifs:  bdds footprints, in encode dhs clustered, in all DNA
       #--------------------------------------------------------------------------------
 
+   stopifnot(all(motifSources %in% c("footprints", "dhs", "allDNA")))
+
    tbl.snp.clean <- tbl.snp[, c("chrom", "pos", "pos")]
    colnames(tbl.snp.clean) <- c("chrom", "start", "end")
    gr.snp <- GRanges(tbl.snp.clean)
+
+      # fill into these data.frames below as appropriate: if implied by motifSources parameter,
+      # if any hits are found
+
+   tbl.fpHits <- data.frame()
+   tbl.dhsMotifHits <- data.frame()
+   tbl.allMotifHits <- data.frame()
 
       #--------------------------------------------------------------------------------
       # do the bdds footprints firest
       #--------------------------------------------------------------------------------
 
-   gr.fp <- GRanges(tbl.fp)
-   tbl.fp.ov <- as.data.frame(findOverlaps(gr.snp, gr.fp, maxgap=shoulder))
-   colnames(tbl.fp.ov) <- c("snp", "fp")
-
-   tbl.fpHits <- cbind(tbl.snp[tbl.fp.ov$snp,], tbl.fp[tbl.fp.ov$fp, "geneSymbol", drop=FALSE ])
-   tbl.fpHits <- unique(subset(tbl.fpHits, geneSymbol %in% gene.models[[modelName]]$gene))
-   tbl.fpHits$modelName <- modelName
-   tbl.fpHits$shoulder <- shoulder
-   tbl.fpHits$source <- "hint+wellington, 16+20 footprints"
+   if("footprints" %in% motifSources){
+      gr.fp <- GRanges(tbl.fp)
+      tbl.fp.ov <- as.data.frame(findOverlaps(gr.snp, gr.fp, maxgap=shoulder))
+      if(nrow(tbl.fp.ov) > 0){
+         colnames(tbl.fp.ov) <- c("snp", "fp")
+         tbl.fpHits <- cbind(tbl.snp[tbl.fp.ov$snp,], tbl.fp[tbl.fp.ov$fp, "geneSymbol", drop=FALSE ])
+         tbl.fpHits <- unique(subset(tbl.fpHits, geneSymbol %in% gene.models[[modelName]]$gene))
+         if(nrow(tbl.fpHits) > 0){
+            tbl.fpHits$modelName <- modelName
+            tbl.fpHits$shoulder <- shoulder
+            tbl.fpHits$source <- "hint+wellington, 16+20 footprints"
+            } # if motif's tf is in the gene model
+         } # if motifs overlapped with footprints
+      } # if footprints requested
 
       #--------------------------------------------------------------------------------
       # now the motifs found in encode open chromatin
       #--------------------------------------------------------------------------------
 
-   gr.dhsMotifs <- GRanges(tbl.dhsMotifs)
-   tbl.dhs.ov <- as.data.frame(findOverlaps(gr.snp, gr.dhsMotifs, maxgap=shoulder))
-   colnames(tbl.dhs.ov) <- c("snp", "dhsMotif")
-
-   tbl.dhsMotifHits <- cbind(tbl.snp[tbl.dhs.ov$snp,],
-                             tbl.dhsMotifs[tbl.dhs.ov$dhsMotif, c("geneSymbol"), drop=FALSE])
-   tbl.dhsMotifHits <- unique(subset(tbl.dhsMotifHits, geneSymbol %in% gene.models[[modelName]]$gene))
-   tbl.dhsMotifHits$modelName <- modelName
-   tbl.dhsMotifHits$shoulder <- shoulder
-   tbl.dhsMotifHits$source <- "encode DHS motifs"
+   if("dhs" %in% motifSources){
+      gr.dhsMotifs <- GRanges(tbl.dhsMotifs)
+      tbl.dhs.ov <- as.data.frame(findOverlaps(gr.snp, gr.dhsMotifs, maxgap=shoulder))
+      if(nrow(tbl.dhs.ov) > 0){
+         colnames(tbl.dhs.ov) <- c("snp", "dhsMotif")
+         tbl.dhsMotifHits <- cbind(tbl.snp[tbl.dhs.ov$snp,],
+                                   tbl.dhsMotifs[tbl.dhs.ov$dhsMotif, c("geneSymbol"), drop=FALSE])
+         tbl.dhsMotifHits <- unique(subset(tbl.dhsMotifHits, geneSymbol %in% gene.models[[modelName]]$gene))
+         if(nrow(tbl.dhsMotifHits) > 0){
+            tbl.dhsMotifHits$modelName <- modelName
+            tbl.dhsMotifHits$shoulder <- shoulder
+            tbl.dhsMotifHits$source <- "encode DHS motifs"
+            } # if hits in gene model
+          } # if overlap
+       } # if dhs requested
 
       #--------------------------------------------------------------------------------
       # now the motifs found in *all* dna
       #--------------------------------------------------------------------------------
-   gr.allDNAMotifs <- GRanges(tbl.allDNAMotifs)
-   tbl.all.ov <- as.data.frame(findOverlaps(gr.snp, gr.allDNAMotifs, maxgap=shoulder))
-   colnames(tbl.all.ov) <- c("snp", "allMotif")
-
-   tbl.allMotifHits <- cbind(tbl.snp[tbl.all.ov$snp,],
-                             tbl.allDNAMotifs[tbl.all.ov$allMotif, c("geneSymbol"), drop=FALSE])
-   tbl.allMotifHits <- unique(subset(tbl.allMotifHits, geneSymbol %in% gene.models[[modelName]]$gene))
-   tbl.allMotifHits$modelName <- modelName
-   tbl.allMotifHits$shoulder <- shoulder
-   tbl.allMotifHits$source <- "all DNA motifs"
-
+   if("allDNA" %in% motifSources){
+      gr.allDNAMotifs <- GRanges(tbl.allDNAMotifs)
+      tbl.all.ov <- as.data.frame(findOverlaps(gr.snp, gr.allDNAMotifs, maxgap=shoulder))
+      if(nrow(tbl.all.ov) > 0){
+         colnames(tbl.all.ov) <- c("snp", "allMotif")
+         tbl.allMotifHits <- cbind(tbl.snp[tbl.all.ov$snp,],
+                                   tbl.allDNAMotifs[tbl.all.ov$allMotif, c("geneSymbol"), drop=FALSE])
+         tbl.allMotifHits <- unique(subset(tbl.allMotifHits, geneSymbol %in% gene.models[[modelName]]$gene))
+         if(nrow(tbl.allMotifHits) > 0){
+            tbl.allMotifHits$modelName <- modelName
+            tbl.allMotifHits$shoulder <- shoulder
+            tbl.allMotifHits$source <- "all DNA motifs"
+            } # if hits in gene model
+         } # if overlap
+      } # if allDNA
 
    tbl.out <- rbind(tbl.fpHits, tbl.dhsMotifHits)
    tbl.out <- rbind(tbl.out, tbl.allMotifHits)
-   tbl.out$tfRank <- match(tbl.out$geneSymbol, gene.models[[model.name]]$gene)
+   genes.in.model <- gene.models[[modelName]]$gene
+   motif.tfs <- tbl.out$geneSymbol
+   match.order <- match(tbl.out$geneSymbol, gene.models[[modelName]]$gene)
+   tbl.out$tfRank <- match.order
+   tbl.out$pearson <- gene.models[[modelName]]$pearson.coef[match.order]
    rownames(tbl.out) <- NULL
 
    tbl.out
 
 } # findVariantsInModel
+#------------------------------------------------------------------------------------------------------------------------
+#assay.single.snp <- function(
+assay <- function(tbl.snp.tf, target.gene, tf, tbl.geno, tbl.pheno, mtx)
+{
+   browser()
+   stopifnot(tf %in% tbl.snp.tf$geneSymbol)
+   tbl.snp.locs <- subset(tbl.snp.tf, geneSymbol==tf)
+   all.samples <- colnames(mtx)
+   par(mfrow=c(1,3))
+   for(r in 1:nrow(tbl.snp.locs)){
+      rsid <- tbl.snp.locs$rsid[r]
+      printf("%s %s %d/%d", tf, rsid, r, nrow(tbl.snp.locs))
+      snp.chrom <- tbl.snp.locs$chrom[r]
+      snp.loc   <- tbl.snp.locs$pos[r]
+      tbl.geno.sub <- subset(tbl.geno, chrom==snp.chrom & start==snp.loc)
+      if(nrow(tbl.geno.sub) == 0)
+         next;
+      wt.samples <- colnames(tbl.geno)[which(subset(tbl.geno, chrom==snp.chrom & start==snp.loc)==0)]
+      wt.samples <- intersect(wt.samples, all.samples)
+      het.samples <- colnames(tbl.geno)[which(subset(tbl.geno, chrom==snp.chrom & start==snp.loc)==1)]
+      het.samples <- intersect(het.samples, all.samples)
+      hom.samples <- colnames(tbl.geno)[which(subset(tbl.geno, chrom==snp.chrom & start==snp.loc)==2)]
+      hom.samples <- intersect(hom.samples, all.samples)
+      vec.tf.wt       <- as.numeric(mtx[tf, wt.samples])
+      vec.tf.mut      <- mtx[tf, c(het.samples, hom.samples)]
+      vec.target.wt   <- mtx[target.gene, wt.samples]
+      vec.target.mut  <- mtx[target.gene, c(het.samples, hom.samples)]
+      correlation <- cor(vec.tf.wt, vec.target.wt)
+      title <- sprintf("%s-%s vs %s wt: %5.3f", tf, rsid, target.gene, correlation)
+      plot(vec.tf.wt,  vec.target.wt, ylim=c(0,8), xlim=c(0,8), main=title)
+      correlation <- cor(vec.tf.mut, vec.target.mut)
+      title <- sprintf("%s vs %s mut: %5.3f", tf, target.gene, cor(vec.tf.mut, vec.target.mut))
+      plot(vec.tf.mut, vec.target.mut, ylim=c(0,8), xlim=c(0,8), main=title)
+      boxplot(vec.tf.wt, vec.tf.mut, vec.target.wt, vec.target.mut)
+      Sys.sleep(5)
+      }
+
+} # assay
+#------------------------------------------------------------------------------------------------------------------------
+test_assay <- function(tbl.snp.tf, tf, tbl.geno, mtx)
+{
+    assay(tbl.20, "EMX1", tbl.geno, tbl.pheno, mtx.tcx.normalized)
+    # EMX1 rs661311 11/27 may have a signal
+    # > subset(tbl.20, rsid=="rs661311")
+    #     rsid chrom      pos    score iupac ref alt A1 CER_Beta   CER_P TX_Beta  TX_P IGAP_A1 IGAP_OR IGAP_Pvalue RegulomeDB Rsquared_rs254776 Dprime_rs254776 geneSymbol modelName shoulder         source tfRank   pearson
+    # rs661311  chr5 88739050 1.872895     Y   C   T  T    -0.11 1.9e-06   -0.03 0.348       T    0.95      0.0134          7             0.485               1       EMX1 mef2c.tcx       20 all DNA motifs      5 0.7821005
+
+
+} # assay
 #------------------------------------------------------------------------------------------------------------------------
 if(!interactive()) {
 
@@ -537,21 +674,30 @@ test_getDHSMotifs <- function()
 test_findVariantsInModel <- function()
 {
    printf("--- test_findVariantsInModel")
-   tbl.00 <- findVariantsInModel(modelName="mef2c.ros", shoulder=0)
-   checkEquals(dim(tbl.00), c(19, 23))
+   tbl.00.fp <- findVariantsInModel(modelName="mef2c.tcx", shoulder=0, motifSource=c("footprints"))
+   checkEquals(dim(tbl.00.fp), c(2, 24))
+
+   tbl.00.dhs <- findVariantsInModel(modelName="mef2c.tcx", shoulder=0, motifSource=c("dhs"))
+   checkEquals(nrow(tbl.00.dhs), 0)
+
+   tbl.00.allDNA <- findVariantsInModel(modelName="mef2c.tcx", shoulder=0, motifSource=c("allDNA"))
+   checkEquals(nrow(tbl.00.allDNA), 11)
+
+   tbl.20 <- findVariantsInModel(modelName="mef2c.tcx", shoulder=15, motifSource=c("footprints", "dhs"))
+
 
    tbl.xtab <- as.data.frame(table(tbl.00$source), stringsAsFactors=FALSE)
-   checkEquals(tbl.xtab$Var1, c("all DNA motifs", "encode DHS motifs", "hint+wellington, 16+20 footprints"))
-   checkEquals(tbl.xtab$Freq, c(13, 3, 3))
+   checkEquals(tbl.xtab$Var1, c("hint+wellington, 16+20 footprints"))
+   checkEquals(tbl.xtab$Freq, c(2))
 
    tbl.xtab <- as.data.frame(table(tbl.00$geneSymbol), stringsAsFactors=FALSE)
-   checkEquals(tbl.xtab$Var1, c("EMX1", "FOXO6", "FOXP1", "HLF", "NFATC3", "ZNF740"))
-   checkEquals(tbl.xtab$Freq, c(3, 4, 2, 2, 5, 3))
+   checkEquals(tbl.xtab$Var1, c("FOXP1"))
+   checkEquals(tbl.xtab$Freq, c(2))
 
       # for a digestible view:
-   coi <- c(1,2,3,4,6,7, 17, 19, 23, 20, 21, 22)
+   coi <- c(1, 2, 3, 4, 6, 7, 17, 19, 23, 24, 20, 21, 22)
       #    tbl.00[, coi]
-   tbl.05 <- findVariantsInModel(modelName="mef2c.ros", shoulder=5)
+   tbl.05 <- findVariantsInModel(modelName="mef2c.tcx", shoulder=5)
    tbl.xtab <- as.data.frame(table(tbl.05$source), stringsAsFactors=FALSE)
    checkEquals(tbl.xtab$Var1, c("all DNA motifs", "encode DHS motifs", "hint+wellington, 16+20 footprints"))
    checkEquals(tbl.xtab$Freq, c(28, 7, 4))
