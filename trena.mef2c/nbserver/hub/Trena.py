@@ -127,7 +127,7 @@ class Trena:
            self.tv.addBedTrackFromDataFrame(regTbl, "DHS motifs", "SQUISHED", "magenta")
         return(regTbl)
 
-    def findVariantsInModel(modelName, shoulder, display):
+    def findVariantsInModel(self, modelName, shoulder, display):
         payload = {"modelName": modelName, "shoulder": shoulder};
         msg = {'cmd': 'findVariantsInModel', 'status': 'request', 'callback': '', 'payload': payload}
         self.trenaServer.send_string(json.dumps(msg))

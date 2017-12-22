@@ -138,8 +138,8 @@ printf("loading motifs found across all DNA: %s", load("../data/tbl.allDNAMotifs
 #    load("~/github/dockerizedMicroservices/trena.mef2c/trena/data/mtx.tcx.pheno.geno.RData")
 #
 #
-printf("loading expression, pheno and geno: %s", paste(load("~/github/dockerizedMicroservices/trena.mef2c/trena/data/mtx.tcx.pheno.geno.RData"), collapse=", "))
-#
+printf("loading expression, pheno and geno: %s", paste(load("../data/mtx.tcx.pheno.geno.RData"), collapse=", "))
+#------------------------------------------------------------------------------------------------------------------------
 # interpret a data.frame as a list of data (a bare data.frame), columnames, and rownames
 # this makes for easy reconstruction into a pandas dataframe in python.
 dataFrameToPandasFriendlyList <- function(tbl)
@@ -235,7 +235,7 @@ processWellStructuredMessage <- function(msg)
       stopifnot("shoulder" %in% names(msg$payload))
       modelName <- msg$payload$modelName
       shoulder <- msg$payload$shoulder
-      tbl.var <- findVariantsInModel(modelName, shoulder)
+      tbl.var <- findVariantsInModel(modelName, shoulder, "footprints")
       key <- as.character(as.numeric(Sys.time()) * 100000)
       cache[[key]] <- tbl.var
       tbl.fp.as.list <- dataFrameToPandasFriendlyList(tbl.var)
@@ -532,7 +532,149 @@ findVariantsInModel <- function(modelName, shoulder, motifSources)
 
 } # findVariantsInModel
 #------------------------------------------------------------------------------------------------------------------------
-#assay.single.snp <- function(
+assay.single.snp <- function(tbl.snp.tf, r, target.gene, tf, tbl.geno, tbl.pheno, mtx)
+{
+   browser()
+   rsid <- tbl.snp.tf$rsid[r]
+   printf("%s %s:%s", target.gene, rsid, tf)
+   snp.chrom <- tbl.snp.tf$chrom[r]
+   snp.loc   <- tbl.snp.tf$pos[r]
+   tbl.geno.sub <- subset(tbl.geno, chrom==snp.chrom & start==snp.loc)
+
+   mtx.samples <- colnames(mtx)
+   wt.samples <- colnames(tbl.geno)[which(subset(tbl.geno, chrom==snp.chrom & start==snp.loc)==0)]
+   wt.samples <- intersect(wt.samples, mtx.samples)
+   het.samples <- colnames(tbl.geno)[which(subset(tbl.geno, chrom==snp.chrom & start==snp.loc)==1)]
+   het.samples <- intersect(het.samples, mtx.samples)
+   hom.samples <- colnames(tbl.geno)[which(subset(tbl.geno, chrom==snp.chrom & start==snp.loc)==2)]
+   hom.samples <- intersect(hom.samples, mtx.samples)
+   mut.samples <- c(het.samples, hom.samples)
+
+   ad.samples <- sub("_TCX", "", subset(tbl.pheno, Diagnosis=="AD")$ID)                       # 79
+   ctl.samples <- sub("_TCX", "", subset(tbl.pheno, Diagnosis=="Control")$ID)                 # 73
+   pathAging.samples <- sub("_TCX", "", subset(tbl.pheno, Diagnosis=="Pathologic Aging")$ID)  # 30
+   psp.samples <- sub("_TCX", "", subset(tbl.pheno, Diagnosis=="PSP")$ID)                     # 81
+
+   ad.samples <- intersect(ad.samples, mtx.samples)                                           # 79
+   ctl.samples <- intersect(ctl.samples, mtx.samples)                                         # 73
+   pathAging.samples <- intersect(pathAging.samples, mtx.samples)                             # 30
+   psp.samples <- intersect(psp.samples, mtx.samples)                                         # 81
+
+   tbl.plot <- data.frame(target=mtx[target.gene,], tf=mtx[tf,], geno="black", pheno=1, stringsAsFactors=FALSE)
+   rownames(tbl.plot) <- colnames(mtx)
+
+   tbl.plot[ctl.samples, "pheno"] <- 15
+   tbl.plot[ad.samples, "pheno"]  <- 16
+   tbl.plot[pathAging.samples, "pheno"]  <- 17
+   tbl.plot[psp.samples, "pheno"]  <- 18
+
+   tbl.plot[wt.samples, "geno"] <- "darkgreen"
+   tbl.plot[het.samples, "geno"] <- "pink"
+   tbl.plot[hom.samples, "geno"] <- "red"
+
+   with(tbl.plot, plot(tf, target, col=geno, pch=pheno))
+
+   cor(mtx[tf, wt.samples],  mtx[target.gene, wt.samples])
+   cor(mtx[tf, het.samples], mtx[target.gene, het.samples])
+   cor(mtx[tf, hom.samples], mtx[target.gene, hom.samples])
+   cor(mtx[tf, mut.samples], mtx[target.gene, mut.samples])
+
+   cor(mtx[tf, ctl.samples],  mtx[target.gene, ctl.samples])
+   cor(mtx[tf, ad.samples], mtx[target.gene, ad.samples])
+   cor(mtx[tf, pathAging.samples], mtx[target.gene, pathAging.samples])
+   cor(mtx[tf, psp.samples], mtx[target.gene, psp.samples])
+
+   ctl.wt.samples <- intersect(ctl.samples, wt.samples)
+   ctl.mut.samples <- intersect(ctl.samples, mut.samples)
+   ctl.het.samples <- intersect(ctl.samples, het.samples)
+   ctl.hom.samples <- intersect(ctl.samples, hom.samples)
+
+   length(ctl.wt.samples)      # 12
+   length(ctl.mut.samples)     # 61
+   length(ctl.het.samples)     # 33
+   length(ctl.hom.samples)     # 28
+
+   ad.wt.samples <- intersect(ad.samples, wt.samples)
+   ad.mut.samples <- intersect(ad.samples, mut.samples)
+   ad.het.samples <- intersect(ad.samples, het.samples)
+   ad.hom.samples <- intersect(ad.samples, hom.samples)
+
+   length(ad.wt.samples)         # 12
+   length(ad.mut.samples)        # 67
+   length(ad.het.samples)        # 36
+   length(ad.hom.samples)        # 31
+
+   pathAging.wt.samples <- intersect(pathAging.samples, wt.samples)      #  4
+   pathAging.mut.samples <- intersect(pathAging.samples, mut.samples)    # 26
+   pathAging.het.samples <- intersect(pathAging.samples, het.samples)    # 21
+   pathAging.hom.samples <- intersect(pathAging.samples, hom.samples)    #  5
+
+   length(pathAging.wt.samples)        #  4
+   length(pathAging.mut.samples)       # 26
+   length(pathAging.het.samples)       # 21
+   length(pathAging.hom.samples)       #  5
+
+   psp.wt.samples <- intersect(psp.samples, wt.samples)
+   psp.mut.samples <- intersect(psp.samples, mut.samples)
+   psp.het.samples <- intersect(psp.samples, het.samples)
+   psp.hom.samples <- intersect(psp.samples, hom.samples)
+
+   length(psp.wt.samples)             # 18
+   length(psp.mut.samples)            # 63
+   length(psp.het.samples)            # 36
+   length(psp.hom.samples)            # 27
+
+   cor(mtx[tf, ctl.wt.samples],  mtx[target.gene, ctl.wt.samples])                    # 0.49
+   cor(mtx[tf, ctl.mut.samples], mtx[target.gene, ctl.mut.samples])                   # 0.68
+   cor(mtx[tf, ctl.het.samples],  mtx[target.gene, ctl.het.samples])                  # 0.66
+   cor(mtx[tf, ctl.hom.samples], mtx[target.gene, ctl.hom.samples])                   # 0.72
+
+   cor(mtx[tf, ad.wt.samples], mtx[target.gene, ad.wt.samples])                       # 0.69
+   cor(mtx[tf, ad.mut.samples], mtx[target.gene, ad.mut.samples])                     # 0.68
+   cor(mtx[tf, ad.het.samples], mtx[target.gene, ad.het.samples])                     # 0.74
+   cor(mtx[tf, ad.hom.samples], mtx[target.gene, ad.hom.samples])                     # 0.62
+
+   cor(mtx[tf, pathAging.wt.samples], mtx[target.gene, pathAging.wt.samples])         # 0.89
+   cor(mtx[tf, pathAging.mut.samples], mtx[target.gene, pathAging.mut.samples])       # 0.36
+   cor(mtx[tf, pathAging.het.samples], mtx[target.gene, pathAging.het.samples])       # 0.39
+   cor(mtx[tf, pathAging.hom.samples], mtx[target.gene, pathAging.hom.samples])       # 0.02
+
+   cor(mtx[tf, psp.wt.samples], mtx[target.gene, psp.wt.samples])                     # 0.56
+   cor(mtx[tf, psp.mut.samples], mtx[target.gene, psp.mut.samples])                   # 0.47
+   cor(mtx[tf, psp.het.samples], mtx[target.gene, psp.het.samples])                   # 0.54
+   cor(mtx[tf, psp.hom.samples], mtx[target.gene, psp.hom.samples])                   # 0.44
+
+
+
+
+   vec.tf <- mtx[tf,]
+   vec.target <- mtx[target.gene,]
+
+   printf("genotype for samples in mtx: %d wt %d het %d hom", length(wt.samples), length(het.samples), length(hom.samples))
+   vec.tf.wt       <- as.numeric(mtx[tf, wt.samples])
+   vec.tf.mut      <- mtx[tf, c(het.samples, hom.samples)]
+   vec.target.wt   <- mtx[target.gene, wt.samples]
+   vec.target.mut  <- mtx[target.gene, c(het.samples, hom.samples)]
+   correlation <- cor(vec.tf.wt, vec.target.wt)
+   title <- sprintf("%s-%s vs %s wt: %5.3f", tf, rsid, target.gene, correlation)
+   plot(vec.tf.wt,  vec.target.wt, ylim=c(0,8), xlim=c(0,8), main=title)
+   correlation <- cor(vec.tf.mut, vec.target.mut)
+   title <- sprintf("%s vs %s mut: %5.3f", tf, target.gene, cor(vec.tf.mut, vec.target.mut))
+   plot(vec.tf.mut, vec.target.mut, ylim=c(0,8), xlim=c(0,8), main=title)
+   boxplot(vec.tf.wt, vec.tf.mut, vec.target.wt, vec.target.mut)
+
+} # assay.single.snp
+#------------------------------------------------------------------------------------------------------------------------
+test_assay.single.snp <- function()
+{
+   printf("--- test_assay.single.snp")
+   if(!exists("tbl.mef2c.eqtl.foxp1.motif.zeroShoulder"))   # rs13158247 (score 1.57, IGAP_Pvalue 0.0271) rs244761 (0.42, 0.381), should be good contrast
+      print(load("../data/tbl.eqtl.mef2c.2snps.FOXP1.motif.RData"))
+
+   assay.single.snp(tbl.mef2c.eqtl.foxp1.motif.zeroShoulder, 1,  "MEF2C", "FOXP1", tbl.geno, tbl.pheno, mtx.tcx.normalized)
+
+} # test_assay.single.snp
+#------------------------------------------------------------------------------------------------------------------------
 assay <- function(tbl.snp.tf, target.gene, tf, tbl.geno, tbl.pheno, mtx)
 {
    browser()
