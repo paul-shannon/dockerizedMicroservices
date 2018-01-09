@@ -817,36 +817,37 @@ test_findVariantsInModel <- function()
 {
    printf("--- test_findVariantsInModel")
    tbl.00.fp <- findVariantsInModel(modelName="mef2c.tcx", shoulder=0, motifSource=c("footprints"))
-   checkEquals(dim(tbl.00.fp), c(2, 24))
+   checkEquals(dim(tbl.00.fp), c(3, 24))
 
    tbl.00.dhs <- findVariantsInModel(modelName="mef2c.tcx", shoulder=0, motifSource=c("dhs"))
-   checkEquals(nrow(tbl.00.dhs), 0)
+   checkEquals(dim(tbl.00.dhs), c(2,24))
 
    tbl.00.allDNA <- findVariantsInModel(modelName="mef2c.tcx", shoulder=0, motifSource=c("allDNA"))
-   checkEquals(nrow(tbl.00.allDNA), 11)
+   checkEquals(dim(tbl.00.allDNA), c(14, 24))
 
-   tbl.20 <- findVariantsInModel(modelName="mef2c.tcx", shoulder=15, motifSource=c("footprints", "dhs"))
+   tbl.15 <- findVariantsInModel(modelName="mef2c.tcx", shoulder=15, motifSource=c("footprints", "dhs"))
+   checkEquals(dim(tbl.15), c(15, 24))
 
-
-   tbl.xtab <- as.data.frame(table(tbl.00$source), stringsAsFactors=FALSE)
+   tbl.xtab <- as.data.frame(table(tbl.00.fp$source), stringsAsFactors=FALSE)
    checkEquals(tbl.xtab$Var1, c("hint+wellington, 16+20 footprints"))
-   checkEquals(tbl.xtab$Freq, c(2))
+   checkEquals(tbl.xtab$Freq, c(3))
 
-   tbl.xtab <- as.data.frame(table(tbl.00$geneSymbol), stringsAsFactors=FALSE)
-   checkEquals(tbl.xtab$Var1, c("FOXP1"))
-   checkEquals(tbl.xtab$Freq, c(2))
+   tbl.xtab <- as.data.frame(table(tbl.00.fp$geneSymbol), stringsAsFactors=FALSE)
+   checkEquals(tbl.xtab$Var1, c("FOXP1", "MEF2A"))
+   checkEquals(tbl.xtab$Freq, c(2, 1))
 
       # for a digestible view:
    coi <- c(1, 2, 3, 4, 6, 7, 17, 19, 23, 24, 20, 21, 22)
       #    tbl.00[, coi]
-   tbl.05 <- findVariantsInModel(modelName="mef2c.tcx", shoulder=5)
+   tbl.05 <- findVariantsInModel(modelName="mef2c.tcx", motifSources=c("footprints", "dhs", "allDNA"),  shoulder=5)
+   checkEquals(dim(tbl.05), c(34, 24))
    tbl.xtab <- as.data.frame(table(tbl.05$source), stringsAsFactors=FALSE)
    checkEquals(tbl.xtab$Var1, c("all DNA motifs", "encode DHS motifs", "hint+wellington, 16+20 footprints"))
-   checkEquals(tbl.xtab$Freq, c(28, 7, 4))
+   checkEquals(tbl.xtab$Freq, c(25, 3, 6))
 
    tbl.xtab <- as.data.frame(table(tbl.05$geneSymbol), stringsAsFactors=FALSE)
-   checkEquals(tbl.xtab$Var1, c("EMX1", "FOXO6", "FOXP1", "HLF", "NFATC3", "SCRT1", "ZNF740"))
-   checkEquals(tbl.xtab$Freq, c(9, 9, 2, 2, 13, 1, 3))
+   checkEquals(tbl.xtab$Var1, c("BHLHE22","EMX1", "FOXP1", "FOXP2", "HLF", "LBX2", "MEF2A", "NFE2L2", "SP3"))
+   checkEquals(tbl.xtab$Freq, c(1, 10, 2, 3, 2, 10, 3, 2, 1))
 
 } # test_findVariantsInModel
 #------------------------------------------------------------------------------------------------------------------------
