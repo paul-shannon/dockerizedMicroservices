@@ -1,13 +1,10 @@
-FROM bioconductor/devel_core2:latest
-RUN useradd -ms /bin/bash trena
-USER root
-RUN apt-get -y install libmariadb-client-lgpl-dev
-RUN apt-get install libpq-dev -y
-user trena
+FROM pshannon/trenaprereqs:latest
+user root
 WORKDIR /home/trena
-RUN mkdir /home/trena/work
-RUN mkdir /home/trena/library
-COPY . /home/trena/
-RUN cat /home/trena/myBashCustomizations >> /home/trena/.bashrc
-RUN R -f installTrenaPrequisites.R
+COPY ./installTrena.sh .
+COPY ./.Rprofile .
+COPY ./ .
+user trena
+RUN bash ./installTrena.sh
+
 
