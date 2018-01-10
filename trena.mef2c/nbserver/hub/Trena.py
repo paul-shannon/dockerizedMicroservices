@@ -13,6 +13,9 @@ class Trena:
        display(self.tv)
        self.tv.setGenome(genomeName)
 
+    def version(self):
+       return(1.01)
+
     def display(self):
        display(self.tv)
 
@@ -138,7 +141,7 @@ class Trena:
         varTbl = self.dataFrameFrom3partList(tblAsList)
         varTbl.key = payload["key"]
         if(display):
-           self.tv.addBedTrackFromDataFrame(regTbl, "snps in model", "SQUISHED", "darkred")
+           self.tv.addBedTrackFromDataFrame(varTbl.loc[:, ['chrom', 'pos', 'pos', 'rsid']], "voi", "SQUISHED", "darkred")
         return(varTbl)
 
     def displayFootprints(self, url):
