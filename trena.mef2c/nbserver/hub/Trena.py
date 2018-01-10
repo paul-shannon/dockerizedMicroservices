@@ -14,7 +14,7 @@ class Trena:
        self.tv.setGenome(genomeName)
 
     def version(self):
-       return(1.01)
+       return(1.02)
 
     def display(self):
        display(self.tv)
