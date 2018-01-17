@@ -14,7 +14,6 @@ if(!exists("gene.models")){
   } # read in gene.models
 #------------------------------------------------------------------------------------------------------------------------
 # can I really recreate cory's old models?  for instance, how comparable is the rosmap data?
-
 #------------------------------------------------------------------------------------------------------------------------
 add.dimer.expression <- function(mtx, dimers)
 {
@@ -76,7 +75,6 @@ if(!exists("tbl.fp")){
    dimers <- unique(grep("::", tbl.fp$geneSymbol, value=TRUE))
    }
 
-
 if(!exists("mtx.cer")){
    load("../../trena/data/mayo.cer.RData")
    mtx.cer <- as.matrix(tbl)               # 15160   263
@@ -104,6 +102,9 @@ if(!exists("mtx.ros")){
 if(!exists("tbl.snp"))
     load("../../trena/data/tbl.snp.hg38.score-ref-alt.RData")
 
+if(!exists("tbl.dhs"))
+   load("../../trena/data/tbl.dhs.RData")
+
 #------------------------------------------------------------------------------------------------------------------------
 if(!exists("trena"))
    trena <- Trena("hg38")
@@ -121,16 +122,26 @@ fp.roi <- list(chrom="chr5", start=88615025, end=89052115)  # "chr5:88,615,025-8
 roi.5kb  <- sprintf("chr5:%d-%d", TSS-5000, TSS+5000)
 foi.eqtl <- sprintf("chr5:%d-%d", min(tbl.snp$pos)-50000, max(tbl.snp$pos)+50000)
 #------------------------------------------------------------------------------------------------------------------------
-makeGeneModel <- function(bindingSiteSource, tbl.roi, motifs.provided=FALSE, mtx, tfMappingSource,
-                          targetGene, orderByColumn="pcaMax")
+runTests <- function()
 {
-   stopifnot(bindingSiteSource %in% c("footprints")) #, "encodeDHS", "allDNA"))
+   test_makeGeneModel.footprints()
+   test_makeGeneModel.encodeDHS()
+   test_makeGeneModel.allDNA()
+
+} # runTests
+#------------------------------------------------------------------------------------------------------------------------
+makeGeneModel <- function(bindingSiteSource, tbl.roi, pfms=NA, pwmMinMatch=95, mtx, tfMappingSource,
+                          targetGene, orderByColumn="pcaMax", solverInclusivenessCutoff=1.0)
+{
+   stopifnot(bindingSiteSource %in% c("footprints", "encodeDHS", "allDNA"))
 
    gr.regions <- GRanges(tbl.roi)
 
    if(bindingSiteSource == "footprints"){
       gr.fp <- GRanges(tbl.fp)
-      tbl.overlaps <- as.data.frame(findOverlaps(gr.regions, gr.fp))
+      tbl.overlaps <- as.data.frame(findOverlaps(gr.regions, gr.fp, type="any"))
+      if(nrow(tbl.overlaps) == 0)
+        return(list(trn=data.frame(), bindingSites=data.frame()))
       colnames(tbl.overlaps) <- c("roi", "fp")
       tbl.roiSites <- tbl.fp[tbl.overlaps$fp, ]
       if("geneSymbol" %in% colnames(tbl.roiSites)){
@@ -138,10 +149,47 @@ makeGeneModel <- function(bindingSiteSource, tbl.roi, motifs.provided=FALSE, mtx
          tbl.roiSites <- tbl.roiSites[, -column.to.remove]
          }
       } # footprints
+   else if(bindingSiteSource == "encodeDHS"){
+     gr.dhs <- GRanges(tbl.dhs)
+     tbl.overlaps <- as.data.frame(findOverlaps(gr.regions, gr.dhs, type="any"))
+     if(nrow(tbl.overlaps) == 0)
+        return(list(trn=data.frame(), bindingSites=data.frame()))
+     colnames(tbl.overlaps) <- c("roi", "dhs")
+     tbl.roi.dhs <- tbl.dhs[tbl.overlaps$dhs, ]
+     if(all(is.na(pfms)))
+        pfms <- as.list(query(query(MotifDb("jaspar2018")), "hsapiens"))
+      mm <- MotifMatcher(genomeName="hg38", pfms)
+      tbl.motifs <- findMatchesByChromosomalRegion(mm, tbl.roi.dhs, pwmMatchMinimumAsPercentage=pwmMinMatch)
+      if(nrow(tbl.motifs) == 0){
+        printf("--- no match of pfms in supplied regions at %d%%", pwmMinMatch)
+        return(list(trn=data.frame(), bindingSites=data.frame()))
+        }
+      tbl.roiSites <- tbl.motifs
+      colnames(tbl.roiSites)[grep("motifStart", colnames(tbl.roiSites))] <- "start"
+      colnames(tbl.roiSites)[grep("motifEnd", colnames(tbl.roiSites))] <- "end"
+      tbl.roiSites$length <- 1 + tbl.roiSites$end - tbl.roiSites$start
+      tbl.roiSites$distance.from.tss <- TSS - tbl.roiSites$start
+      } # encodeDHS
 
-      # add in TFClass tfs
-   #colnames(tbl.roiSites)[grep("geneSymbol", colnames(tbl.roiSites))] <- "tf"
-   tbl.roiSites$shortMotif <-  unlist(lapply(strsplit((tbl.roiSites$motifName), "-"), "[", 4))
+   else if(bindingSiteSource == "allDNA"){
+     if(all(is.na(pfms)))
+        pfms <- as.list(query(query(MotifDb("jaspar2018")), "hsapiens"))
+      mm <- MotifMatcher(genomeName="hg38", pfms)
+      tbl.motifs <- findMatchesByChromosomalRegion(mm, tbl.roi, pwmMatchMinimumAsPercentage=pwmMinMatch)
+      if(nrow(tbl.motifs) == 0){
+        printf("--- no match of pfms in supplied regions at %d%%", pwmMinMatch)
+        return(list(trn=data.frame(), bindingSites=data.frame()))
+        }
+      tbl.roiSites <- tbl.motifs
+      colnames(tbl.roiSites)[grep("motifStart", colnames(tbl.roiSites))] <- "start"
+      colnames(tbl.roiSites)[grep("motifEnd", colnames(tbl.roiSites))] <- "end"
+      tbl.roiSites$length <- 1 + tbl.roiSites$end - tbl.roiSites$start
+      tbl.roiSites$distance.from.tss <- TSS - tbl.roiSites$start
+      } # allDNA
+
+
+   tbl.roiSites$shortMotif <-  unlist(lapply(strsplit((tbl.roiSites$motifName), "-"),
+                                             function(tokens) tokens[length(tokens)]))
 
    tbl.roiSites <- associateTranscriptionFactors(MotifDb, tbl.roiSites, source=tfMappingSource, expand.rows=TRUE)
    colnames(tbl.roiSites)[grep("geneSymbol", colnames(tbl.roiSites))] <- "tf"
@@ -152,7 +200,7 @@ makeGeneModel <- function(bindingSiteSource, tbl.roi, motifs.provided=FALSE, mtx
 
    solverNames <- c("lasso", "lassopv", "pearson", "randomForest", "ridge", "spearman")
    solver <- EnsembleSolver(mtx, targetGene=targetGene,
-                            candidateRegulators=tfs.known, solverNames, geneCutoff = 0.5)
+                            candidateRegulators=tfs.known, solverNames, geneCutoff = solverInclusivenessCutoff)
    tbl.model <- run(solver)
    colnames(tbl.model)[grep("gene", colnames(tbl.model))] <- "tf"
    tbl.bindingSitesInModel <- subset(tbl.roiSites, tf %in% tbl.model$tf)
@@ -172,46 +220,201 @@ makeGeneModel <- function(bindingSiteSource, tbl.roi, motifs.provided=FALSE, mtx
 
 } # makeGeneModel
 #------------------------------------------------------------------------------------------------------------------------
-test_makeGeneModel <- function()
+test_makeGeneModel.footprints <- function()
 {
-   printf("--- test_makeGeneModel")
+   printf("--- test_makeGeneModel.footprints")
 
       # a small model
    tbl.roi <- data.frame(chrom="chr5", start=TSS, end=TSS+2000, stringsAsFactors=FALSE)
 
+    #--------------------------------------------------------------------------------
+    # use pre-calculated footprints, 2kb region, conservative mapping of motifs to tf
+    # all tfs returned
+    #--------------------------------------------------------------------------------
+
    x0 <- makeGeneModel(bindingSiteSource="footprints",
                        tbl.roi,
-                       motifs.provided=TRUE,
                        mtx=mtx.tcx,
                        tfMappingSource="MotifDb",
                        targetGene="MEF2C",
-                       orderByColumn="rfScore")
+                       orderByColumn="rfScore",
+                       solverInclusivenessCutoff=1.0)
 
    checkEquals(sort(names(x0)), c("bindingSites", "trn"))
-   tbl.trn <- x0$trn
-   tbl.bindingSites <- x0$bindingSites
-   checkEquals(dim(tbl.trn), c(6, 10))
-   checkEquals(dim(tbl.bindingSites), c(6, 14))
-   checkEquals(sort(tbl.trn$tf), sort(unique(tbl.bindingSites$tf)))
-   checkTrue(all(tbl.trn$tf %in%  c("TEAD1", "ZNF740", "TEAD3", "RARA::RXRA", "RUNX2", "SPI1")))
+   tbl.trn.0 <- x0$trn
+   tbl.bindingSites.0 <- x0$bindingSites
+   tfs.0 <- tbl.trn.0$tf
+   checkTrue(all(tfs.0 %in% tbl.bindingSites.0$tf))
+   checkEquals(dim(tbl.trn.0), c(6, 10))
+   checkEquals(dim(tbl.bindingSites.0), c(6, 14))
+   checkEquals(sort(tfs.0), c("RARA::RXRA", "RUNX2", "SPI1", "TEAD1", "TEAD3", "ZNF740"))
+
+    #--------------------------------------------------------------------------------
+    # same as x0, but use TFclass motif-to-tf mapping
+    #--------------------------------------------------------------------------------
 
      # same request, but using TFclass motif-to-tf mapping
    x1 <- makeGeneModel(bindingSiteSource="footprints",
                        tbl.roi,
-                       motifs.provided=TRUE,
                        mtx=mtx.tcx,
                        tfMappingSource="TFclass",
                        targetGene="MEF2C",
-                       orderByColumn="rfScore")
+                       orderByColumn="rfScore",
+                       solverInclusivenessCutoff=1.0)
 
    checkEquals(sort(names(x1)), c("bindingSites", "trn"))
-   tbl.trn <- x1$trn
-   tbl.bindingSites <- x1$bindingSites
-   checkEquals(dim(tbl.trn), c(8, 10))
-   checkEquals(dim(tbl.bindingSites), c(13, 14))
-   checkEquals(sort(tbl.trn$tf), sort(unique(tbl.bindingSites$tf)))
-   checkTrue(all(tbl.trn$tf %in%  c("ARX", "PRRX1", "HOPX", "RARA", "RXRA", "ZNF740", "TEAD1", "TEAD2")))
+   tbl.trn.1 <- x1$trn
+   tbl.bindingSites.1 <- x1$bindingSites
+   tfs.1 <- tbl.trn.1$tf
+   checkTrue(length(setdiff(tfs.0, tfs.1)) > 0)   # TFClass finds more and different tfs than does MotifDb
+   checkTrue(all(tfs.1 %in% tbl.bindingSites.1$tf))
+   checkEquals(dim(tbl.trn.1), c(16, 10))
+   checkEquals(dim(tbl.bindingSites.1), c(28, 14))
+   checkTrue(all(tfs.1 %in% c("PRRX1", "ARX", "HOPX", "RXRA", "RARA", "TEAD1", "ZNF740", "RHOXF1", "VSX1", "OTX1",
+                               "OTX2", "TEAD2", "TEAD3", "TEAD4", "UNCX", "SPI1")))
+
+} # makeGeneModel.footprints
+#------------------------------------------------------------------------------------------------------------------------
+test_makeGeneModel.encodeDHS <- function()
+{
+   printf("--- test_makeGeneModel.encodeDHS")
+
+      # a larger region producing a small model, since no dhs regions are near TSS
+   tbl.roi <- data.frame(chrom="chr5", start=TSS, end=TSS+8000, stringsAsFactors=FALSE)
+
+    #--------------------------------------------------------------------------------
+    # now use encode DHS, jaspar2018 human, conservative tf mapping, all tfs
+    #--------------------------------------------------------------------------------
+
+   x2 <- makeGeneModel(bindingSiteSource="encodeDHS",
+                       tbl.roi,
+                       mtx=mtx.tcx,
+                       pfms=as.list(query(query(MotifDb, "jaspar2018"), "hsapiens")),
+                       pwmMinMatch=97,
+                       tfMappingSource="MotifDb",
+                       targetGene="MEF2C",
+                       orderByColumn="rfScore",
+                       solverInclusivenessCutoff=1.0)
+
+   checkEquals(sort(names(x2)), c("bindingSites", "trn"))
+   tbl.trn.2 <- x2$trn
+   tfs.2 <- tbl.trn.2$tf
+   tbl.bindingSites.2 <- x2$bindingSites
+   motifNames.2 <- tbl.bindingSites.2$shortMotif
+   checkTrue(all(tfs.2 %in% tbl.bindingSites.2$tf))
+
+   checkEquals(sort(unique(tbl.bindingSites.2$shortMotif)),
+               c("MA0036.1", "MA0077.1", "MA0080.1", "MA0098.1", "MA0719.1", "MA1120.1", "MA1125.1"))
+
+   checkEquals(dim(tbl.trn.2), c(7, 10))
+   checkEquals(dim(tbl.bindingSites.2), c(16, 17))
+   checkTrue(all(tfs.2 %in% c("RHOXF1", "SOX13", "ZNF384", "SOX9", "GATA2", "SPI1", "ETS1")))
+
+    #--------------------------------------------------------------------------------
+    # as x2, but with motif match at 95
+    #--------------------------------------------------------------------------------
+
+   x3 <- makeGeneModel(bindingSiteSource="encodeDHS",
+                       tbl.roi,
+                       mtx=mtx.tcx,
+                       pfms=as.list(query(query(MotifDb, "jaspar2018"), "hsapiens")),
+                       pwmMinMatch=95,
+                       tfMappingSource="MotifDb",
+                       targetGene="MEF2C",
+                       orderByColumn="rfScore",
+                       solverInclusivenessCutoff=1.0)
+
+   checkEquals(sort(names(x3)), c("bindingSites", "trn"))
+   tbl.trn.3 <- x3$trn
+   tbl.bindingSites.3 <- x3$bindingSites
+   tfs.3 <- sort(unique(tbl.trn.3$tf))
+   checkTrue(all(tfs.2 %in% tfs.3))
+   checkTrue(length(tfs.3) > length(tfs.2))
+   checkEquals(tfs.3, c("ETS1", "GATA2", "MEIS1", "RBPJ", "RHOXF1", "SOX13", "SOX15", "SOX9", "SPI1", "ZNF384"))
+
+   motifNames.3 <- sort(unique(tbl.bindingSites.3$shortMotif))
+   checkTrue(all(motifNames.2 %in% motifNames.3))
+   checkEquals(motifNames.3, c("MA0036.1", "MA0077.1", "MA0080.1", "MA0098.1", "MA0498.2", "MA0719.1", "MA1116.1",
+                               "MA1120.1", "MA1125.1", "MA1152.1"))
+
+   checkTrue(all(tbl.bindingSites.3$motifRelativeScore >= 0.95))
+
+   checkEquals(dim(tbl.trn.3), c(10, 10))
+   checkEquals(dim(tbl.bindingSites.3), c(22, 17))
+   checkEquals(sort(tbl.trn.3$tf), sort(unique(tbl.bindingSites.3$tf)))
+
+} # test_makeGeneModel.encodeDHS
+#------------------------------------------------------------------------------------------------------------------------
+test_makeGeneModel.allDNA <- function()
+{
+   printf("--- test_makeGeneModel.allDNA")
+
+   tbl.roi <- data.frame(chrom="chr5", start=TSS, end=TSS+2000, stringsAsFactors=FALSE)
+
+    #--------------------------------------------------------------------------------
+    # now use allDNA, jaspar2018 human, conservative tf mapping, all tfs
+    #--------------------------------------------------------------------------------
+
+   x5 <- makeGeneModel(bindingSiteSource="allDNA",
+                       tbl.roi,
+                       mtx=mtx.tcx,
+                       pfms=as.list(query(query(MotifDb, "jaspar2018"), "hsapiens")),
+                       pwmMinMatch=100,
+                       tfMappingSource="MotifDb",
+                       targetGene="MEF2C",
+                       orderByColumn="pcaMax",
+                       solverInclusivenessCutoff=1.0)
+
+   checkEquals(sort(names(x5)), c("bindingSites", "trn"))
+   tbl.trn.5 <- x5$trn
+   tfs.5 <- tbl.trn.5$tf
+   tbl.bindingSites.5 <- x5$bindingSites
+   motifNames.5 <- tbl.bindingSites.5$shortMotif
+   checkTrue(all(tfs.5 %in% tbl.bindingSites.5$tf))
+
+   checkEquals(sort(unique(tbl.bindingSites.5$shortMotif)),
+               c("MA0056.1", "MA0080.1", "MA0098.1", "MA0124.1", "MA0157.1"))
+
+   checkEquals(dim(tbl.trn.5), c(5, 10))
+   checkEquals(dim(tbl.bindingSites.5), c(7, 17))
+   checkTrue(all(tfs.5 %in% c("FOXO3", "ETS1", "NKX3-1", "SPI1", "MZF1")))
+
+    #--------------------------------------------------------------------------------
+    # as x5, but with motif match at 97
+    #--------------------------------------------------------------------------------
+
+   x6 <- makeGeneModel(bindingSiteSource="allDNA",
+                       tbl.roi,
+                       mtx=mtx.tcx,
+                       pfms=as.list(query(query(MotifDb, "jaspar2018"), "hsapiens")),
+                       pwmMinMatch=97,
+                       tfMappingSource="MotifDb",
+                       targetGene="MEF2C",
+                       orderByColumn="rfScore",
+                       solverInclusivenessCutoff=1.0)
+
+   checkEquals(sort(names(x6)), c("bindingSites", "trn"))
+   tbl.trn.6 <- x6$trn
+   tbl.bindingSites.6 <- x6$bindingSites
+   tfs.6 <- sort(unique(tbl.trn.6$tf))
+   checkTrue(all(tfs.5 %in% tfs.6))
+   checkEquals(tfs.6, c("ETS1", "FOXC1", "FOXG1", "FOXO3", "FOXO4", "FOXO6", "GATA2", "MZF1",
+                        "NFATC2", "NFATC3", "NFIC", "NFIX", "NKX3-1", "PRRX1", "SP1", "SPI1",
+                        "TEAD3", "UNCX", "ZEB1", "ZNF354C"))
 
 
-} # test_makeGeneModel
+   motifNames.6 <- sort(unique(tbl.bindingSites.6$shortMotif))
+   checkTrue(all(motifNames.5 %in% motifNames.6))
+   checkEquals(motifNames.6, c("MA0032.1", "MA0036.1", "MA0036.3", "MA0056.1", "MA0079.2", "MA0080.1",
+                               "MA0098.1", "MA0103.2", "MA0103.3", "MA0124.1", "MA0130.1", "MA0152.1",
+                               "MA0157.1", "MA0157.2", "MA0161.1", "MA0613.1", "MA0625.1", "MA0671.1",
+                               "MA0716.1", "MA0721.1", "MA0808.1", "MA0848.1", "MA0849.1"))
+
+   checkTrue(all(tbl.bindingSites.6$motifRelativeScore >= 0.97))
+
+   checkEquals(dim(tbl.trn.6), c(20, 10))
+   checkEquals(dim(tbl.bindingSites.6), c(44, 17))
+   checkEquals(sort(tbl.trn.6$tf), sort(unique(tbl.bindingSites.6$tf)))
+
+} # test_makeGeneModel.allDNA
 #------------------------------------------------------------------------------------------------------------------------
